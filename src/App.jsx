@@ -164,7 +164,7 @@ export default function App() {
               </div>
 
               <div style={{ marginBottom: 26 }}>
-                <Label>Review Platform</Label>
+                <Label><span style={{ display: "block", textAlign: "center" }}>Review Platform</span></Label>
                 <div style={{ display: "flex", gap: 12 }}>
                   {PLATFORMS.map(p => (
                     <button key={p.id} onClick={() => setPlatform(p.id)}
@@ -181,7 +181,7 @@ export default function App() {
 
             {/* Phone preview — centered below */}
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: 52 }}>
-              <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 4, color: C.textSub, marginBottom: 20 }}>MESSAGE PREVIEW</div>
+              <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 4, color: "#1A3A6B", marginBottom: 20, fontWeight: "700" }}>MESSAGE PREVIEW</div>
               <div style={{ width: 250, background: "#0D1117", borderRadius: 38, padding: "20px 13px 26px", boxShadow: "0 20px 60px rgba(13,17,23,0.18), 0 0 0 1px #1a2a3a" }}>
                 <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
                   <div style={{ width: 46, height: 6, borderRadius: 3, background: "#1a2a3a" }} />
@@ -205,34 +205,25 @@ export default function App() {
         {tab === "log" && (
           <div className="fade-up">
             <PageHeader title="Message History" sub={`${log.length} messages sent`} />
-            <div style={card}>
-              <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>{["Customer","Phone","Platform","Sent","Status"].map(h => (
-                    <th key={h} style={{ textAlign: "left", fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", padding: "0 0 16px", borderBottom: `1px solid ${C.border}` }}>{h}</th>
-                  ))}</tr>
-                </thead>
-                <tbody>
-                  {log.map((row, i) => (
-                    <tr key={i} style={{ borderBottom: `1px solid ${C.border}` }}>
-                      <td style={{ padding: "15px 0", fontFamily: font.body, fontSize: 15, color: C.text }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 11 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid #D6E2F0`, color: "#1A5FBF", fontFamily: font.display, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{row.name.charAt(0)}</div>
-                          {row.name}
-                        </div>
-                      </td>
-                      <td style={{ padding: "15px 0", fontFamily: font.mono, fontSize: 12, color: C.textMuted }}>{row.phone}</td>
-                      <td style={{ padding: "15px 0" }}>
-                        <span style={{ fontFamily: font.body, fontSize: 12, letterSpacing: 1, padding: "3px 11px", borderRadius: 99, background: row.platform === "Google" ? "#4A90D918" : "#C0392B18", color: row.platform === "Google" ? "#4A90D9" : "#e74c3c", border: `1px solid ${row.platform === "Google" ? "#4A90D933" : "#C0392B33"}` }}>{row.platform}</span>
-                      </td>
-                      <td style={{ padding: "15px 0", fontFamily: font.body, fontSize: 13, color: C.textMuted }}>{row.time}</td>
-                      <td style={{ padding: "15px 0" }}>
-                        <span style={{ fontFamily: font.body, fontSize: 12, letterSpacing: 1, padding: "3px 11px", borderRadius: 99, background: C.greenBg, color: C.green, border: `1px solid ${C.green}33` }}>{row.status}</span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {log.map((row, i) => (
+                <div key={i} style={{ ...card, padding: "18px 20px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: "1px solid #D6E2F0", color: "#1A5FBF", fontFamily: font.display, fontSize: 16, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{row.name.charAt(0)}</div>
+                      <div>
+                        <div style={{ fontFamily: font.display, fontSize: 16, color: C.text, fontWeight: "600" }}>{row.name}</div>
+                        <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted, marginTop: 2 }}>{row.phone}</div>
+                      </div>
+                    </div>
+                    <span style={{ fontFamily: font.body, fontSize: 12, letterSpacing: 1, padding: "4px 12px", borderRadius: 99, background: C.greenBg, color: C.green, border: `1px solid ${C.green}33`, fontWeight: "600" }}>{row.status}</span>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <span style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 1, padding: "4px 12px", borderRadius: 99, background: row.platform === "Google" ? "#4A90D918" : "#C0392B18", color: row.platform === "Google" ? "#4A90D9" : "#e74c3c", border: `1px solid ${row.platform === "Google" ? "#4A90D933" : "#C0392B33"}`, fontWeight: "600" }}>{row.platform}</span>
+                    <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>{row.time}</div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         )}
@@ -302,7 +293,7 @@ const inputStyle = {
 };
 
 function Label({ children }) {
-  return <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 11, letterSpacing: 3, color: "#9DADC4", textTransform: "uppercase", marginBottom: 8 }}>{children}</div>;
+  return <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 11, letterSpacing: 3, color: "#1A3A6B", textTransform: "uppercase", marginBottom: 8, fontWeight: "700" }}>{children}</div>;
 }
 
 function Field({ label, value, onChange, placeholder, type = "text" }) {
