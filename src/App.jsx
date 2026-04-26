@@ -230,7 +230,7 @@ function SuperAdminDashboard({ onSignOut }) {
             </button>
             {menuOpen && (
               <div style={{ position: "absolute", right: 0, top: "calc(100% + 10px)", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, minWidth: 200, overflow: "hidden", boxShadow: "0 12px 40px rgba(13,17,23,0.12)" }}>
-                {[["companies","◈","Marketing Companies"],["businesses","◉","All Businesses"]].map(([id,ico,label]) => (
+                {[["companies","◈","Marketing Companies"],["businesses","◉","All Businesses"],["photos","📸","All Photos"]].map(([id,ico,label]) => (
                   <button key={id} onClick={() => { setTab(id); setMenuOpen(false); }}
                     style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 18px", background: tab === id ? C.surfaceHover : "none", border: "none", color: tab === id ? C.gold : C.textMuted, cursor: "pointer", fontFamily: font.body, fontSize: 14, textAlign: "left" }}>
                     <span style={{ fontSize: 11, color: C.gold }}>{ico}</span>{label}
@@ -340,6 +340,11 @@ function SuperAdminDashboard({ onSignOut }) {
             </div>
           </div>
         )}
+
+        {tab === "photos" && (
+          <PhotosTab isAdmin={true} />
+        )}
+
       </main>
     </div>
   );
@@ -502,7 +507,6 @@ function MarketingDashboard({ data, onSignOut }) {
 // ── BUSINESS APP ──────────────────────────────────────────────────────────────
 function BusinessApp({ data, onSignOut }) {
   const [tab, setTab] = useState("send");
-  const [menuOpen, setMenuOpen] = useState(false);
   const [settings, setSettings] = useState(data);
   const [editingSettings, setEditingSettings] = useState(false);
   const [draftSettings, setDraftSettings] = useState(data);
@@ -512,14 +516,8 @@ function BusinessApp({ data, onSignOut }) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [log, setLog] = useState([]);
-  const menuRef = useRef(null);
 
-  useEffect(() => {
-    loadMessages();
-    const handler = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  useEffect(() => { loadMessages(); }, []);
 
   const loadMessages = async () => {
     const { data: msgs } = await supabase.from("messages").select("*").eq("business_id", data.id).order("sent_at", { ascending: false });
@@ -527,12 +525,6 @@ function BusinessApp({ data, onSignOut }) {
   };
 
   const formatPhone = (raw) => "+1" + raw.replace(/\D/g, "");
-
-  const reviewLink = platform === "google" ? settings.google_link : settings.yelp_link;
-  const previewMessage = (settings.message_template || "")
-    .replace("{name}", customerName || "Customer")
-    .replace("{business}", settings.name)
-    .replace("{link}", reviewLink);
 
   const handleSend = async () => {
     if (!phone || !customerName) return;
@@ -557,12 +549,8 @@ function BusinessApp({ data, onSignOut }) {
         setSent(true);
         loadMessages();
         setTimeout(() => { setSent(false); setCustomerName(""); setPhone(""); }, 2800);
-      } else {
-        alert("Failed to send: " + result.error);
-      }
-    } catch (err) {
-      alert("Could not reach the server.");
-    }
+      } else { alert("Failed to send: " + result.error); }
+    } catch (err) { alert("Could not reach the server."); }
     setSending(false);
   };
 
@@ -575,48 +563,44 @@ function BusinessApp({ data, onSignOut }) {
     setEditingSettings(false);
   };
 
+  const navItems = [
+    { id: "send", icon: "✉", label: "Send" },
+    { id: "photos", icon: "📸", label: "Photos" },
+    { id: "log", icon: "📋", label: "History" },
+    { id: "settings", icon: "⚙", label: "Settings" },
+  ];
+
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text }}>
+    <div style={{ position: "fixed", inset: 0, background: C.bg, display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <style>{globalCSS}</style>
-      <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ maxWidth: 780, margin: "0 auto", padding: "0 28px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 5, color: C.gold }}>★ REVIEWSEND</div>
-          <div ref={menuRef} style={{ position: "relative" }}>
-            <button onClick={() => setMenuOpen(o => !o)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 4.5 }}>
-              {[0,1,2].map(i => <span key={i} style={{ display: "block", width: 18, height: 1.5, background: C.text, borderRadius: 2 }} />)}
-            </button>
-            {menuOpen && (
-              <div style={{ position: "absolute", right: 0, top: "calc(100% + 10px)", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, minWidth: 230, overflow: "hidden", boxShadow: "0 12px 40px rgba(13,17,23,0.12)" }}>
-                <div style={{ padding: "16px 18px", borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ fontFamily: font.display, fontSize: 14, color: C.text }}>{settings.name}</div>
-                  <div style={{ fontFamily: font.body, fontSize: 11, color: C.gold, marginTop: 3, letterSpacing: 2 }}>PRO PLAN</div>
-                </div>
-                {[["send","✦","Send Review Request"],["log","◈","Message History"],["settings","◉","Settings"]].map(([id,ico,label]) => (
-                  <button key={id} onClick={() => { setTab(id); setMenuOpen(false); }}
-                    style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 18px", background: tab === id ? C.surfaceHover : "none", border: "none", color: tab === id ? C.gold : C.textMuted, cursor: "pointer", fontFamily: font.body, fontSize: 14, textAlign: "left" }}>
-                    <span style={{ fontSize: 11, color: C.gold }}>{ico}</span>{label}
-                  </button>
-                ))}
-                <div style={{ borderTop: `1px solid ${C.border}` }}>
-                  <button onClick={onSignOut} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 18px", background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontFamily: font.body, fontSize: 14, textAlign: "left" }}>→ Sign Out</button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
 
-      <main style={{ maxWidth: 780, margin: "0 auto", padding: "52px 28px 80px" }}>
+      {/* Top bar */}
+      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 20px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
+        <div style={{ fontFamily: font.body, fontSize: 12, letterSpacing: 5, color: C.gold }}>★ REVIEWSEND</div>
+        <div style={{ fontFamily: font.display, fontSize: 14, color: C.text, fontWeight: 600 }}>{settings.name}</div>
+        <button onClick={onSignOut} style={{ background: "none", border: "none", fontFamily: font.body, fontSize: 13, color: C.textMuted, cursor: "pointer" }}>Sign out</button>
+      </div>
 
+      {/* Page content */}
+      <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
+
+        {/* SEND */}
         {tab === "send" && (
-          <div className="fade-up">
-            <PageHeader title="Send a Review Request" sub="Deliver a personal text message with your review link" />
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "center", padding: "20px 24px", gap: 16 }}>
+            <div style={{ textAlign: "center", marginBottom: 4 }}>
+              <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Send a Review Request</div>
+              <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 4 }}>Text a customer a direct link</div>
+            </div>
             <div style={card}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
-                <Field label="Customer Name" value={customerName} onChange={setCustomerName} placeholder="e.g. Isabelle" />
-                <Field label="Phone Number" value={phone} onChange={setPhone} placeholder="(555) 000-0000" />
+              <div style={{ marginBottom: 16 }}>
+                <Label>Customer Name</Label>
+                <input style={inputStyle} placeholder="e.g. Sarah" value={customerName} onChange={e => setCustomerName(e.target.value)} />
               </div>
-              <div style={{ marginBottom: 26 }}>
+              <div style={{ marginBottom: 16 }}>
+                <Label>Phone Number</Label>
+                <input style={inputStyle} placeholder="(555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} />
+              </div>
+              <div style={{ marginBottom: 20 }}>
                 <Label><span style={{ display: "block", textAlign: "center" }}>Review Platform</span></Label>
                 <div style={{ display: "flex", gap: 12 }}>
                   {PLATFORMS.map(p => (
@@ -630,47 +614,39 @@ function BusinessApp({ data, onSignOut }) {
               </div>
               <SendBtn onClick={handleSend} sending={sending} sent={sent} disabled={!phone || !customerName} />
             </div>
-
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginTop: 52 }}>
-              <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 4, color: "#1A3A6B", marginBottom: 20, fontWeight: "700" }}>MESSAGE PREVIEW</div>
-              <div style={{ width: 250, background: "#0D1117", borderRadius: 38, padding: "20px 13px 26px", boxShadow: "0 20px 60px rgba(13,17,23,0.18), 0 0 0 1px #1a2a3a" }}>
-                <div style={{ display: "flex", justifyContent: "center", marginBottom: 16 }}>
-                  <div style={{ width: 46, height: 6, borderRadius: 3, background: "#1a2a3a" }} />
-                </div>
-                <div style={{ background: "#F4F7FB", borderRadius: 24, minHeight: 230, padding: "22px 15px 18px", display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                    <div style={{ background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", color: "#ffffff", borderRadius: "18px 18px 4px 18px", padding: "12px 15px", fontSize: 13, lineHeight: 1.55, maxWidth: "88%", fontFamily: font.body, fontWeight: 500 }}>
-                      {previewMessage}
-                    </div>
-                  </div>
-                  <div style={{ fontFamily: font.mono, fontSize: 9.5, color: C.textSub, textAlign: "right", marginTop: 12 }}>
-                    {platform === "google" ? "Google Review" : "Yelp Review"} · Just now
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         )}
 
+        {/* PHOTOS */}
+        {tab === "photos" && (
+          <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "20px 24px 20px" }}>
+            <PhotosTab businessId={data.id} businessName={settings.name} />
+          </div>
+        )}
+
+        {/* HISTORY */}
         {tab === "log" && (
-          <div className="fade-up">
-            <PageHeader title="Message History" sub={`${log.length} messages sent`} />
+          <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "20px 24px" }}>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Message History</div>
+              <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 4 }}>{log.length} messages sent</div>
+            </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {log.map((row, i) => (
-                <div key={i} style={{ ...card, padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: "1px solid #D6E2F0", color: "#1A5FBF", fontFamily: font.display, fontSize: 16, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{row.customer_name.charAt(0)}</div>
+                <div key={i} style={{ ...card, padding: "16px 18px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 15, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{row.customer_name.charAt(0)}</div>
                       <div>
-                        <div style={{ fontFamily: font.display, fontSize: 16, color: C.text, fontWeight: "600" }}>{row.customer_name}</div>
-                        <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted, marginTop: 2 }}>{row.customer_phone}</div>
+                        <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{row.customer_name}</div>
+                        <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{row.customer_phone}</div>
                       </div>
                     </div>
-                    <span style={{ fontFamily: font.body, fontSize: 12, letterSpacing: 1, padding: "4px 12px", borderRadius: 99, background: C.greenBg, color: C.green, border: `1px solid ${C.green}33`, fontWeight: "600" }}>Delivered</span>
+                    <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: C.greenBg, color: C.green, border: `1px solid ${C.green}33`, fontWeight: 600 }}>Delivered</span>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 1, padding: "4px 12px", borderRadius: 99, background: row.platform === "Google" ? "#4A90D918" : "#C0392B18", color: row.platform === "Google" ? "#4A90D9" : "#e74c3c", border: `1px solid ${row.platform === "Google" ? "#4A90D933" : "#C0392B33"}`, fontWeight: "600" }}>{row.platform}</span>
-                    <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>{new Date(row.sent_at).toLocaleDateString()}</div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontFamily: font.body, fontSize: 12, padding: "3px 10px", borderRadius: 99, background: row.platform === "Google" ? "#4A90D918" : "#C0392B18", color: row.platform === "Google" ? "#4A90D9" : "#e74c3c", border: `1px solid ${row.platform === "Google" ? "#4A90D933" : "#C0392B33"}`, fontWeight: 600 }}>{row.platform}</span>
+                    <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{new Date(row.sent_at).toLocaleDateString()}</div>
                   </div>
                 </div>
               ))}
@@ -679,16 +655,20 @@ function BusinessApp({ data, onSignOut }) {
           </div>
         )}
 
+        {/* SETTINGS */}
         {tab === "settings" && (
-          <div className="fade-up">
-            <PageHeader title="Business Settings" sub="Manage your profile and review destinations" />
+          <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "20px 24px" }}>
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Settings</div>
+              <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 4 }}>Manage your business profile</div>
+            </div>
             <div style={{ ...card, maxWidth: 520, margin: "0 auto" }}>
               {[
                 { label: "Business Name", key: "name", placeholder: "Your Business Name" },
                 { label: "Google Review Link", key: "google_link", placeholder: "https://g.page/r/..." },
                 { label: "Yelp Review Link", key: "yelp_link", placeholder: "https://www.yelp.com/biz/..." },
               ].map(f => (
-                <div key={f.key} style={{ marginBottom: 20 }}>
+                <div key={f.key} style={{ marginBottom: 16 }}>
                   <Label>{f.label}</Label>
                   <input style={{ ...inputStyle, ...(editingSettings ? {} : { opacity: 0.5 }) }}
                     value={editingSettings ? draftSettings[f.key] : settings[f.key]}
@@ -696,12 +676,9 @@ function BusinessApp({ data, onSignOut }) {
                     onChange={e => setDraftSettings(d => ({ ...d, [f.key]: e.target.value }))} />
                 </div>
               ))}
-              <div style={{ marginBottom: 26 }}>
+              <div style={{ marginBottom: 20 }}>
                 <Label>Message Template</Label>
-                <p style={{ fontFamily: font.body, fontSize: 12, color: C.textSub, marginBottom: 8 }}>
-                  Use <code style={{ color: C.gold, fontFamily: font.mono, fontSize: 11 }}>{"{name}"}</code> · <code style={{ color: C.gold, fontFamily: font.mono, fontSize: 11 }}>{"{business}"}</code> · <code style={{ color: C.gold, fontFamily: font.mono, fontSize: 11 }}>{"{link}"}</code>
-                </p>
-                <textarea rows={4} style={{ ...inputStyle, resize: "vertical", minHeight: 100, lineHeight: 1.65, ...(editingSettings ? {} : { opacity: 0.5 }) }}
+                <textarea rows={3} style={{ ...inputStyle, resize: "none", lineHeight: 1.6, ...(editingSettings ? {} : { opacity: 0.5 }) }}
                   value={editingSettings ? draftSettings.message_template : settings.message_template}
                   disabled={!editingSettings}
                   onChange={e => setDraftSettings(d => ({ ...d, message_template: e.target.value }))} />
@@ -709,12 +686,12 @@ function BusinessApp({ data, onSignOut }) {
               <div style={{ display: "flex", gap: 12 }}>
                 {editingSettings ? (
                   <>
-                    <button onClick={saveSettings} style={{ ...btnStyle, flex: 1 }}>Save Changes</button>
+                    <button onClick={saveSettings} style={{ ...btnStyle, flex: 1 }}>Save</button>
                     <button onClick={() => { setDraftSettings({ ...settings }); setEditingSettings(false); }} style={{ ...ghostBtnStyle, flex: 1 }}>Cancel</button>
                   </>
                 ) : (
                   <button onClick={() => { setDraftSettings({ ...settings }); setEditingSettings(true); }}
-                    style={{ flex: 1, padding: "13px", background: "none", border: `1px solid #1A5FBF88`, borderRadius: 10, color: "#1A5FBF", cursor: "pointer", fontFamily: font.body, fontSize: 15, letterSpacing: 0.5 }}>
+                    style={{ flex: 1, padding: "13px", background: "none", border: `1px solid #1A5FBF88`, borderRadius: 10, color: "#1A5FBF", cursor: "pointer", fontFamily: font.body, fontSize: 15 }}>
                     Edit Settings
                   </button>
                 )}
@@ -722,7 +699,150 @@ function BusinessApp({ data, onSignOut }) {
             </div>
           </div>
         )}
-      </main>
+      </div>
+
+      {/* Bottom Nav */}
+      <div style={{ background: C.surface, borderTop: `1px solid ${C.border}`, display: "flex", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom)" }}>
+        {navItems.map(item => (
+          <button key={item.id} onClick={() => setTab(item.id)}
+            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 0 8px", background: "none", border: "none", cursor: "pointer", gap: 4, transition: "all 0.15s" }}>
+            <span style={{ fontSize: 20, lineHeight: 1 }}>{item.icon}</span>
+            <span style={{ fontFamily: font.body, fontSize: 11, fontWeight: tab === item.id ? 700 : 400, color: tab === item.id ? C.gold : C.textMuted, letterSpacing: 0.5 }}>{item.label}</span>
+            {tab === item.id && <div style={{ width: 4, height: 4, borderRadius: "50%", background: C.gold, marginTop: 2 }} />}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── PHOTOS TAB ────────────────────────────────────────────────────────────────
+function PhotosTab({ businessId, businessName, isAdmin = false }) {
+  const [photos, setPhotos] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [caption, setCaption] = useState("");
+  const fileInputRef = useRef(null);
+
+  useEffect(() => { loadPhotos(); }, []);
+
+  const loadPhotos = async () => {
+    const query = isAdmin
+      ? supabase.from("photos").select("*, businesses(name)").order("created_at", { ascending: false })
+      : supabase.from("photos").select("*").eq("business_id", businessId).order("created_at", { ascending: false });
+    const { data } = await query;
+    if (data) setPhotos(data);
+  };
+
+  const handleUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    const fileName = `${businessId}/${Date.now()}-${file.name}`;
+    const { error: uploadError } = await supabase.storage.from("business-photos").upload(fileName, file);
+    if (!uploadError) {
+      await supabase.from("photos").insert([{
+        business_id: businessId,
+        file_path: fileName,
+        file_name: file.name,
+        caption: caption,
+        status: "pending",
+      }]);
+      setCaption("");
+      loadPhotos();
+    }
+    setUploading(false);
+  };
+
+  const updateStatus = async (id, status) => {
+    const updates = { status };
+    if (status === "downloaded") updates.downloaded_at = new Date().toISOString();
+    if (status === "posted") updates.posted_at = new Date().toISOString();
+    await supabase.from("photos").update(updates).eq("id", id);
+    loadPhotos();
+  };
+
+  const downloadPhoto = async (photo) => {
+    const { data } = await supabase.storage.from("business-photos").download(photo.file_path);
+    if (data) {
+      const url = URL.createObjectURL(data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = photo.file_name;
+      a.click();
+      URL.revokeObjectURL(url);
+      if (photo.status === "pending") updateStatus(photo.id, "downloaded");
+    }
+  };
+
+  const statusBadge = (status) => {
+    const styles = {
+      pending: { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" },
+      downloaded: { bg: "#EFF6FF", color: "#1D4ED8", border: "#BFDBFE" },
+      posted: { bg: "#F0FDF4", color: "#15803D", border: "#BBF7D0" },
+    };
+    const labels = { pending: "⬜ Pending", downloaded: "⬇️ Downloaded", posted: "✅ Posted to Google" };
+    const st = styles[status] || styles.pending;
+    return (
+      <span style={{ fontFamily: font.body, fontSize: 12, padding: "4px 12px", borderRadius: 99, background: st.bg, color: st.color, border: `1px solid ${st.border}`, fontWeight: 600 }}>
+        {labels[status] || "⬜ Pending"}
+      </span>
+    );
+  };
+
+  return (
+    <div className="fade-up">
+      <PageHeader title={isAdmin ? "All Business Photos" : "Upload Photos"} sub={isAdmin ? `${photos.length} total photos` : "Upload photos for your Google Business listing"} />
+
+      {!isAdmin && (
+        <div style={{ ...card, marginBottom: 24 }}>
+          <div style={{ marginBottom: 16 }}>
+            <Label>Caption (optional)</Label>
+            <input style={inputStyle} value={caption} onChange={e => setCaption(e.target.value)} placeholder="e.g. New menu item, team photo, storefront..." />
+          </div>
+          <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" style={{ display: "none" }} />
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
+            style={{ ...btnStyle, width: "100%" }}>
+            {uploading ? "Uploading…" : "📸 Upload Photo"}
+          </button>
+          <p style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, textAlign: "center", marginTop: 12 }}>
+            Photos will be reviewed and posted to your Google Business listing by your account manager.
+          </p>
+        </div>
+      )}
+
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {photos.map((photo, i) => (
+          <div key={i} style={{ ...card, padding: "18px 20px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📸</div>
+                <div>
+                  <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{photo.file_name}</div>
+                  {isAdmin && photo.businesses && <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 2 }}>{photo.businesses.name}</div>}
+                  {photo.caption && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 2 }}>{photo.caption}</div>}
+                  <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textSub, marginTop: 4 }}>{new Date(photo.created_at).toLocaleDateString()}</div>
+                </div>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                {statusBadge(photo.status)}
+                {isAdmin && (
+                  <>
+                    <button onClick={() => downloadPhoto(photo)} style={{ ...ghostBtnStyle, padding: "8px 16px", fontSize: 13 }}>⬇️ Download</button>
+                    {photo.status !== "posted" && (
+                      <button onClick={() => updateStatus(photo.id, "posted")} style={{ ...btnStyle, padding: "8px 16px", fontSize: 13 }}>✅ Mark as Posted</button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+        {photos.length === 0 && (
+          <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>
+            {isAdmin ? "No photos uploaded yet." : "No photos uploaded yet. Upload your first photo above!"}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
