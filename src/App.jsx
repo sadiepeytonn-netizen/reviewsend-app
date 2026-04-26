@@ -567,6 +567,7 @@ function BusinessApp({ data, onSignOut }) {
     { id: "send", icon: "✉", label: "Send" },
     { id: "photos", icon: "📸", label: "Photos" },
     { id: "log", icon: "📋", label: "History" },
+    { id: "analytics", icon: "📊", label: "Analytics" },
     { id: "settings", icon: "⚙", label: "Settings" },
   ];
 
@@ -699,6 +700,12 @@ function BusinessApp({ data, onSignOut }) {
             </div>
           </div>
         )}
+
+        {/* ANALYTICS */}
+        {tab === "analytics" && (
+          <AnalyticsTab log={log} businessName={settings.name} />
+        )}
+
       </div>
 
       {/* Bottom Nav */}
@@ -712,6 +719,110 @@ function BusinessApp({ data, onSignOut }) {
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── ANALYTICS TAB ─────────────────────────────────────────────────────────────
+function AnalyticsTab({ log, businessName }) {
+  const now = new Date();
+  const thisMonth = log.filter(m => new Date(m.sent_at).getMonth() === now.getMonth() && new Date(m.sent_at).getFullYear() === now.getFullYear());
+  const lastMonth = log.filter(m => { const d = new Date(m.sent_at); const lm = new Date(now.getFullYear(), now.getMonth() - 1); return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear(); });
+  const googleCount = log.filter(m => m.platform === "Google").length;
+  const yelpCount = log.filter(m => m.platform === "Yelp").length;
+  const total = log.length;
+  const googlePct = total > 0 ? Math.round((googleCount / total) * 100) : 0;
+  const yelpPct = total > 0 ? Math.round((yelpCount / total) * 100) : 0;
+  const growth = lastMonth.length > 0 ? Math.round(((thisMonth.length - lastMonth.length) / lastMonth.length) * 100) : 0;
+
+  const getLast7Days = () => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const count = log.filter(m => {
+        const md = new Date(m.sent_at);
+        return md.toDateString() === d.toDateString();
+      }).length;
+      days.push({ label: d.toLocaleDateString("en", { weekday: "short" }), count });
+    }
+    return days;
+  };
+
+  const days = getLast7Days();
+  const maxCount = Math.max(...days.map(d => d.count), 1);
+
+  const statCard = (value, label, sub, color = C.gold) => (
+    <div style={{ ...card, padding: "16px 18px", textAlign: "center" }}>
+      <div style={{ fontFamily: font.display, fontSize: 32, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 600, color: C.text, marginTop: 6 }}>{label}</div>
+      {sub && <div style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, marginTop: 3 }}>{sub}</div>}
+    </div>
+  );
+
+  return (
+    <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "20px 20px 20px" }}>
+      <div style={{ textAlign: "center", marginBottom: 20 }}>
+        <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Analytics</div>
+        <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 4 }}>Your ReviewSend performance</div>
+      </div>
+
+      {/* Stat cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+        {statCard(total, "Total Sent", "All time")}
+        {statCard(thisMonth.length, "This Month", lastMonth.length > 0 ? `${growth > 0 ? "+" : ""}${growth}% vs last month` : "First month!", growth >= 0 ? C.green : "#e74c3c")}
+        {statCard(googleCount, "Google", `${googlePct}%`, "#4A90D9")}
+        {statCard(yelpCount, "Yelp", `${yelpPct}%`, "#C0392B")}
+      </div>
+
+      {/* 7-day bar chart */}
+      <div style={{ ...card, padding: "20px 16px" }}>
+        <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 16, fontWeight: 700 }}>Last 7 Days</div>
+        <div style={{ display: "flex", gap: 6, alignItems: "flex-end", height: 80 }}>
+          {days.map((d, i) => (
+            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+              <div style={{ fontFamily: font.mono, fontSize: 10, color: C.textMuted }}>{d.count > 0 ? d.count : ""}</div>
+              <div style={{ width: "100%", background: d.count > 0 ? `linear-gradient(180deg, #1A5FBF, #0d3d8a)` : C.border, borderRadius: "4px 4px 2px 2px", height: `${Math.max((d.count / maxCount) * 56, d.count > 0 ? 8 : 4)}px`, transition: "height 0.3s" }} />
+              <div style={{ fontFamily: font.body, fontSize: 10, color: C.textMuted }}>{d.label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Platform breakdown */}
+      <div style={{ ...card, padding: "20px 16px", marginTop: 12 }}>
+        <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 16, fontWeight: 700 }}>Platform Breakdown</div>
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 22, height: 22, borderRadius: 6, background: "#4A90D9", color: "#fff", fontSize: 11, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>G</span>
+              <span style={{ fontFamily: font.body, fontSize: 14, color: C.text }}>Google</span>
+            </div>
+            <span style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{googleCount} ({googlePct}%)</span>
+          </div>
+          <div style={{ height: 8, background: C.border, borderRadius: 99, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${googlePct}%`, background: "linear-gradient(90deg, #4A90D9, #2D7DD2)", borderRadius: 99, transition: "width 0.5s" }} />
+          </div>
+        </div>
+        <div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ width: 22, height: 22, borderRadius: 6, background: "#C0392B", color: "#fff", fontSize: 11, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>Y</span>
+              <span style={{ fontFamily: font.body, fontSize: 14, color: C.text }}>Yelp</span>
+            </div>
+            <span style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{yelpCount} ({yelpPct}%)</span>
+          </div>
+          <div style={{ height: 8, background: C.border, borderRadius: 99, overflow: "hidden" }}>
+            <div style={{ height: "100%", width: `${yelpPct}%`, background: "linear-gradient(90deg, #C0392B, #962d22)", borderRadius: 99, transition: "width 0.5s" }} />
+          </div>
+        </div>
+      </div>
+
+      {total === 0 && (
+        <div style={{ textAlign: "center", padding: "30px 0", fontFamily: font.body, fontSize: 15, color: C.textMuted }}>
+          No data yet. Start sending review requests to see your analytics!
+        </div>
+      )}
     </div>
   );
 }
