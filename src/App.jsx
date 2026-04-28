@@ -402,6 +402,7 @@ function MarketingDashboard({ data, onSignOut }) {
   const [newBiz, setNewBiz] = useState({ name: "", email: "", google_link: "", yelp_link: "" });
   const [newAM, setNewAM] = useState({ name: "", email: "" });
   const [saving, setSaving] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -608,9 +609,20 @@ function MarketingDashboard({ data, onSignOut }) {
         {/* CLIENTS LIST */}
         {!selectedBusiness && tab === "clients" && (
           <div className="fade-up">
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 36 }}>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
               <PageHeader title="My Clients" sub={`${businesses.length} businesses`} />
               <button onClick={() => setShowAdd(true)} style={{ ...btnStyle, marginTop: 8 }}>+ Add Client</button>
+            </div>
+
+            {/* Search bar */}
+            <div style={{ position: "relative", marginBottom: 20 }}>
+              <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: C.textMuted }}>🔍</span>
+              <input
+                style={{ ...inputStyle, paddingLeft: 42 }}
+                placeholder="Search by business name or email..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
             </div>
             {showAdd && (
               <div style={{ ...card, marginBottom: 24 }}>
@@ -628,7 +640,10 @@ function MarketingDashboard({ data, onSignOut }) {
               </div>
             )}
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {businesses.map(b => {
+              {businesses.filter(b =>
+                b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                b.email.toLowerCase().includes(searchQuery.toLowerCase())
+              ).map(b => {
                 const bizMsgs = messages.filter(m => m.business_id === b.id);
                 const thisMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); });
                 const isActive = thisMonth.length > 0;
@@ -658,7 +673,10 @@ function MarketingDashboard({ data, onSignOut }) {
                   </div>
                 );
               })}
-              {businesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No clients yet. Add one above!</div>}
+              {businesses.filter(b =>
+                b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                b.email.toLowerCase().includes(searchQuery.toLowerCase())
+              ).length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>{searchQuery ? `No clients found for "${searchQuery}"` : "No clients yet. Add one above!"}</div>}
             </div>
           </div>
         )}
@@ -777,6 +795,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState(null);
   const [selectedBizTab, setSelectedBizTab] = useState("analytics");
+  const [searchQuery, setSearchQuery] = useState("");
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -940,8 +959,23 @@ function AccountManagerDashboard({ data, onSignOut }) {
         {!selectedBusiness && tab === "clients" && (
           <div className="fade-up">
             <PageHeader title="My Clients" sub={`${businesses.length} businesses assigned to you`} />
+
+            {/* Search bar */}
+            <div style={{ position: "relative", marginBottom: 20 }}>
+              <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: C.textMuted }}>🔍</span>
+              <input
+                style={{ ...inputStyle, paddingLeft: 42 }}
+                placeholder="Search by business name or email..."
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+              />
+            </div>
+
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {businesses.map(b => {
+              {businesses.filter(b =>
+                b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                b.email.toLowerCase().includes(searchQuery.toLowerCase())
+              ).map(b => {
                 const bizMsgs = messages.filter(m => m.business_id === b.id);
                 const thisMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); });
                 const isActive = thisMonth.length > 0;
@@ -969,7 +1003,10 @@ function AccountManagerDashboard({ data, onSignOut }) {
                   </div>
                 );
               })}
-              {businesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No clients assigned yet. Contact your manager to get clients assigned.</div>}
+              {businesses.filter(b =>
+                b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                b.email.toLowerCase().includes(searchQuery.toLowerCase())
+              ).length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>{searchQuery ? `No clients found for "${searchQuery}"` : "No clients assigned yet. Contact your manager to get clients assigned."}</div>}
             </div>
           </div>
         )}
