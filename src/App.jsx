@@ -1550,12 +1550,35 @@ function BulkSendTab({ business, onComplete }) {
 
           <div style={{ ...card, background: C.surfaceHover }}>
             <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 12, fontWeight: 700 }}>CSV Format Required</div>
-            <div style={{ fontFamily: font.mono, fontSize: 12, color: C.text, background: C.bg, padding: "12px 14px", borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: 12, lineHeight: 1.8 }}>
-              Name,Phone<br/>
-              Sarah Johnson,9545551234<br/>
-              John Smith,3054449876<br/>
-              Maria Garcia,7865553210
+            
+            {/* Spreadsheet mockup */}
+            <div style={{ border: `1px solid #C8D5E8`, borderRadius: 8, overflow: "hidden", marginBottom: 14, fontSize: 13, fontFamily: font.mono }}>
+              {/* Column headers */}
+              <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 1fr", background: "#E2EBF5", borderBottom: "1px solid #C8D5E8" }}>
+                <div style={{ padding: "7px 8px", borderRight: "1px solid #C8D5E8", color: C.textSub, fontSize: 11, textAlign: "center" }}></div>
+                <div style={{ padding: "7px 12px", borderRight: "1px solid #C8D5E8", color: C.gold, fontWeight: 700, letterSpacing: 1 }}>A</div>
+                <div style={{ padding: "7px 12px", color: C.gold, fontWeight: 700, letterSpacing: 1 }}>B</div>
+              </div>
+              {/* Header row */}
+              <div style={{ display: "grid", gridTemplateColumns: "32px 1fr 1fr", background: "#EEF3FA", borderBottom: "1px solid #C8D5E8" }}>
+                <div style={{ padding: "7px 8px", borderRight: "1px solid #C8D5E8", color: C.textSub, fontSize: 11, textAlign: "center", background: "#E2EBF5" }}>1</div>
+                <div style={{ padding: "7px 12px", borderRight: "1px solid #C8D5E8", color: C.gold, fontWeight: 700 }}>Name</div>
+                <div style={{ padding: "7px 12px", color: C.gold, fontWeight: 700 }}>Phone</div>
+              </div>
+              {/* Data rows */}
+              {[["Sarah Johnson","9545551234"],["John Smith","3054449876"],["Maria Garcia","7865553210"]].map(([name, phone], i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "32px 1fr 1fr", borderBottom: i < 2 ? "1px solid #C8D5E8" : "none", background: i % 2 === 0 ? "#fff" : "#F9FBFE" }}>
+                  <div style={{ padding: "7px 8px", borderRight: "1px solid #C8D5E8", color: C.textSub, fontSize: 11, textAlign: "center", background: "#E2EBF5" }}>{i + 2}</div>
+                  <div style={{ padding: "7px 12px", borderRight: "1px solid #C8D5E8", color: C.text }}>{name}</div>
+                  <div style={{ padding: "7px 12px", color: C.text }}>{phone}</div>
+                </div>
+              ))}
             </div>
+
+            <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginBottom: 12, lineHeight: 1.6 }}>
+              ⚠️ Column A must be <strong>Name</strong>, Column B must be <strong>Phone</strong> (10 digits, no dashes or spaces). First row is the header and will be skipped automatically.
+            </div>
+
             <button onClick={downloadTemplate} style={{ ...ghostBtnStyle, fontSize: 13, padding: "8px 16px" }}>
               ⬇️ Download Template
             </button>
