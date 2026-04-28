@@ -52,6 +52,8 @@ export default function App() {
   const [authError, setAuthError] = useState("");
   const [authLoading, setAuthLoading] = useState(false);
 
+  const [accountManagerData, setAccountManagerData] = useState(null);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -61,7 +63,7 @@ export default function App() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       if (session) loadUserRole(session.user.email);
-      else { setLoading(false); setUserRole(null); setBusinessData(null); setMarketingData(null); }
+      else { setLoading(false); setUserRole(null); setBusinessData(null); setMarketingData(null); setAccountManagerData(null); }
     });
     return () => subscription.unsubscribe();
   }, []);
@@ -75,6 +77,8 @@ export default function App() {
     }
     const { data: mc } = await supabase.from("marketing_companies").select("*").eq("email", email).single();
     if (mc) { setUserRole("marketing"); setMarketingData(mc); setLoading(false); return; }
+    const { data: am } = await supabase.from("account_managers").select("*, marketing_companies(*)").eq("email", email).single();
+    if (am) { setUserRole("accountmanager"); setAccountManagerData(am); setLoading(false); return; }
     const { data: biz } = await supabase.from("businesses").select("*").eq("email", email).single();
     if (biz) { setUserRole("business"); setBusinessData(biz); setLoading(false); return; }
     setUserRole("unknown");
@@ -111,6 +115,7 @@ export default function App() {
 
   if (userRole === "superadmin") return <SuperAdminDashboard onSignOut={handleSignOut} />;
   if (userRole === "marketing") return <MarketingDashboard data={marketingData} onSignOut={handleSignOut} />;
+  if (userRole === "accountmanager") return <AccountManagerDashboard data={accountManagerData} onSignOut={handleSignOut} />;
   if (userRole === "business") return <BusinessApp data={businessData} onSignOut={handleSignOut} />;
 
   return (
@@ -653,6 +658,243 @@ function MarketingDashboard({ data, onSignOut }) {
                   );
                 })}
                 {businesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 20 }}>No clients yet.</div>}
+              </div>
+            </div>
+          </div>
+        )}
+
+      </main>
+    </div>
+  );
+}
+
+// ── ACCOUNT MANAGER DASHBOARD ─────────────────────────────────────────────────
+function AccountManagerDashboard({ data, onSignOut }) {
+  const [businesses, setBusinesses] = useState([]);
+  const [messages, setMessages] = useState([]);
+  const [photos, setPhotos] = useState([]);
+  const [tab, setTab] = useState("clients");
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    loadData();
+    const handler = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const loadData = async () => {
+    const { data: biz } = await supabase.from("businesses").select("*").eq("marketing_company_id", data.marketing_company_id).order("created_at", { ascending: false });
+    if (biz) {
+      setBusinesses(biz);
+      const ids = biz.map(b => b.id);
+      if (ids.length > 0) {
+        const { data: msgs } = await supabase.from("messages").select("*").in("business_id", ids).order("sent_at", { ascending: false });
+        if (msgs) setMessages(msgs);
+        const { data: ph } = await supabase.from("photos").select("*, businesses(name)").in("business_id", ids).order("created_at", { ascending: false });
+        if (ph) setPhotos(ph);
+      }
+    }
+  };
+
+  const downloadPhoto = async (photo) => {
+    const { data: fileData } = await supabase.storage.from("business-photos").download(photo.file_path);
+    if (fileData) {
+      const url = URL.createObjectURL(fileData);
+      const a = document.createElement("a");
+      a.href = url; a.download = photo.file_name; a.click();
+      URL.revokeObjectURL(url);
+      await supabase.from("photos").update({ status: "downloaded", downloaded_at: new Date().toISOString() }).eq("id", photo.id);
+      loadData();
+    }
+  };
+
+  const markAsPosted = async (id) => {
+    await supabase.from("photos").update({ status: "posted", posted_at: new Date().toISOString() }).eq("id", id);
+    loadData();
+  };
+
+  const statusBadge = (status) => {
+    const styles = { pending: { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" }, downloaded: { bg: "#EFF6FF", color: "#1D4ED8", border: "#BFDBFE" }, posted: { bg: "#F0FDF4", color: "#15803D", border: "#BBF7D0" } };
+    const labels = { pending: "⬜ Pending", downloaded: "⬇️ Downloaded", posted: "✅ Posted to Google" };
+    const st = styles[status] || styles.pending;
+    return <span style={{ fontFamily: font.body, fontSize: 12, padding: "4px 12px", borderRadius: 99, background: st.bg, color: st.color, border: `1px solid ${st.border}`, fontWeight: 600 }}>{labels[status] || "⬜ Pending"}</span>;
+  };
+
+  const pendingPhotos = photos.filter(p => p.status === "pending").length;
+
+  return (
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text }}>
+      <style>{globalCSS}</style>
+      <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 28px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 5, color: C.gold }}>★ REVIEWSEND</div>
+          <div ref={menuRef} style={{ position: "relative" }}>
+            <button onClick={() => setMenuOpen(o => !o)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 4.5 }}>
+              {[0,1,2].map(i => <span key={i} style={{ display: "block", width: 18, height: 1.5, background: C.text, borderRadius: 2 }} />)}
+            </button>
+            {menuOpen && (
+              <div style={{ position: "absolute", right: 0, top: "calc(100% + 10px)", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, minWidth: 230, overflow: "hidden", boxShadow: "0 12px 40px rgba(13,17,23,0.12)" }}>
+                <div style={{ padding: "16px 18px", borderBottom: `1px solid ${C.border}` }}>
+                  <div style={{ fontFamily: font.display, fontSize: 14, color: C.text }}>{data.name}</div>
+                  <div style={{ fontFamily: font.body, fontSize: 11, color: C.gold, marginTop: 3, letterSpacing: 2 }}>ACCOUNT MANAGER</div>
+                </div>
+                {[["clients","◈","My Clients"],["photos","📸",`Photos${pendingPhotos > 0 ? ` (${pendingPhotos} new)` : ""}`],["activity","◉","Activity"],["analytics","📊","Analytics"]].map(([id,ico,label]) => (
+                  <button key={id} onClick={() => { setTab(id); setMenuOpen(false); }}
+                    style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 18px", background: tab === id ? C.surfaceHover : "none", border: "none", color: tab === id ? C.gold : C.textMuted, cursor: "pointer", fontFamily: font.body, fontSize: 14, textAlign: "left" }}>
+                    <span style={{ fontSize: 11, color: tab === id ? C.gold : C.gold }}>{ico}</span>{label}
+                  </button>
+                ))}
+                <div style={{ borderTop: `1px solid ${C.border}` }}>
+                  <button onClick={onSignOut} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 18px", background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontFamily: font.body, fontSize: 14, textAlign: "left" }}>→ Sign Out</button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main style={{ maxWidth: 900, margin: "0 auto", padding: "44px 28px 80px" }}>
+
+        {/* CLIENTS */}
+        {tab === "clients" && (
+          <div className="fade-up">
+            <PageHeader title="My Clients" sub={`${businesses.length} businesses assigned to you`} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {businesses.map(b => {
+                const bizMsgs = messages.filter(m => m.business_id === b.id);
+                const thisMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); });
+                const isActive = thisMonth.length > 0;
+                return (
+                  <div key={b.id} style={{ ...card, padding: "20px 24px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" }}>{b.name.charAt(0)}</div>
+                        <div>
+                          <div style={{ fontFamily: font.display, fontSize: 16, color: C.text, fontWeight: 600 }}>{b.name}</div>
+                          <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted, marginTop: 2 }}>{b.email}</div>
+                        </div>
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <span style={{ fontFamily: font.body, fontSize: 12, padding: "4px 12px", borderRadius: 99, background: isActive ? C.greenBg : "#FFF3CD", color: isActive ? C.green : "#856404", border: `1px solid ${isActive ? C.green + "33" : "#FFC10733"}`, fontWeight: 600 }}>{isActive ? "Active" : "Inactive"}</span>
+                        <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 6 }}>{bizMsgs.length} total · {thisMonth.length} this month</div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {businesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No clients assigned yet.</div>}
+            </div>
+          </div>
+        )}
+
+        {/* PHOTOS */}
+        {tab === "photos" && (
+          <div className="fade-up">
+            <PageHeader title="Client Photos" sub={`${pendingPhotos} pending · ${photos.length} total`} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {photos.map((photo, i) => (
+                <div key={i} style={{ ...card, padding: "18px 20px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 10, background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>📸</div>
+                      <div>
+                        <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{photo.file_name}</div>
+                        {photo.businesses && <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 2 }}>{photo.businesses.name}</div>}
+                        {photo.caption && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 2 }}>{photo.caption}</div>}
+                        <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textSub, marginTop: 3 }}>{new Date(photo.created_at).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                      {statusBadge(photo.status)}
+                      <button onClick={() => downloadPhoto(photo)} style={{ ...ghostBtnStyle, padding: "8px 16px", fontSize: 13 }}>⬇️ Download</button>
+                      {photo.status !== "posted" && <button onClick={() => markAsPosted(photo.id)} style={{ ...btnStyle, padding: "8px 16px", fontSize: 13 }}>✅ Mark as Posted</button>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+              {photos.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No photos uploaded yet.</div>}
+            </div>
+          </div>
+        )}
+
+        {/* ACTIVITY */}
+        {tab === "activity" && (
+          <div className="fade-up">
+            <PageHeader title="All Activity" sub={`${messages.length} messages sent`} />
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {messages.map((msg, i) => {
+                const biz = businesses.find(b => b.id === msg.business_id);
+                return (
+                  <div key={i} style={{ ...card, padding: "16px 20px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 14, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>{msg.customer_name.charAt(0)}</div>
+                        <div>
+                          <div style={{ fontFamily: font.display, fontSize: 14, color: C.text, fontWeight: 600 }}>{msg.customer_name}</div>
+                          <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{msg.customer_phone}</div>
+                        </div>
+                      </div>
+                      <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: C.greenBg, color: C.green, border: `1px solid ${C.green}33`, fontWeight: 600 }}>Delivered</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold }}>{biz?.name || "Unknown"}</div>
+                      <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{new Date(msg.sent_at).toLocaleDateString()}</div>
+                    </div>
+                  </div>
+                );
+              })}
+              {messages.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No activity yet.</div>}
+            </div>
+          </div>
+        )}
+
+        {/* ANALYTICS */}
+        {tab === "analytics" && (
+          <div className="fade-up">
+            <PageHeader title="Analytics" sub="Performance across your assigned clients" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
+              {[
+                { value: messages.length, label: "Total Texts Sent", color: C.gold },
+                { value: businesses.length, label: "Assigned Clients", color: "#4A90D9" },
+                { value: messages.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length, label: "Sent This Month", color: C.green },
+              ].map((s, i) => (
+                <div key={i} style={{ ...card, padding: "20px 16px", textAlign: "center" }}>
+                  <div style={{ fontFamily: font.display, fontSize: 36, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 8 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={card}>
+              <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 20, fontWeight: 700 }}>Client Breakdown</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {businesses.map(biz => {
+                  const bizMessages = messages.filter(m => m.business_id === biz.id);
+                  const thisMonth = bizMessages.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); });
+                  const isActive = thisMonth.length > 0;
+                  const maxMsgs = Math.max(...businesses.map(b => messages.filter(m => m.business_id === b.id).length), 1);
+                  return (
+                    <div key={biz.id}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{biz.name.charAt(0)}</div>
+                          <div>
+                            <div style={{ fontFamily: font.display, fontSize: 14, color: C.text, fontWeight: 600 }}>{biz.name}</div>
+                            <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{thisMonth.length} this month</div>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontFamily: font.body, fontSize: 12, fontWeight: 600, color: C.text }}>{bizMessages.length} total</span>
+                          <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: isActive ? C.greenBg : "#FFF3CD", color: isActive ? C.green : "#856404", border: `1px solid ${isActive ? C.green + "33" : "#FFC10733"}`, fontWeight: 600 }}>{isActive ? "Active" : "Inactive"}</span>
+                        </div>
+                      </div>
+                      <div style={{ height: 6, background: C.border, borderRadius: 99, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.round((bizMessages.length / maxMsgs) * 100)}%`, background: `linear-gradient(90deg, ${C.gold}, #0d3d8a)`, borderRadius: 99 }} />
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
