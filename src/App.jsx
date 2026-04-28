@@ -1185,10 +1185,14 @@ function BusinessApp({ data, onSignOut }) {
       .replace("{business}", settings.name)
       .replace("{link}", link);
     try {
-      const response = await fetch("https://reviewsend-server-production.up.railway.app/send-sms", {
+      const endpoint = settings.logo_url ? "/send-mms" : "/send-sms";
+      const body = settings.logo_url
+        ? JSON.stringify({ to: formatPhone(phone), message, mediaUrl: settings.logo_url })
+        : JSON.stringify({ to: formatPhone(phone), message });
+      const response = await fetch(`https://reviewsend-server-production.up.railway.app${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: formatPhone(phone), message }),
+        body,
       });
       const result = await response.json();
       if (result.success) {
@@ -1204,7 +1208,28 @@ function BusinessApp({ data, onSignOut }) {
     setSending(false);
   };
 
-  const saveSettings = async () => {
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoInputRef = useRef(null);
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setLogoUploading(true);
+    const fileName = `${data.id}/logo-${Date.now()}.${file.name.split('.').pop()}`;
+    const { error } = await supabase.storage.from("business-logos").upload(fileName, file, { upsert: true });
+    if (!error) {
+      const { data: urlData } = supabase.storage.from("business-logos").getPublicUrl(fileName);
+      const logoUrl = urlData.publicUrl;
+      await supabase.from("businesses").update({ logo_url: logoUrl }).eq("id", data.id);
+      setSettings(s => ({ ...s, logo_url: logoUrl }));
+    }
+    setLogoUploading(false);
+  };
+
+  const removeLogo = async () => {
+    await supabase.from("businesses").update({ logo_url: null }).eq("id", data.id);
+    setSettings(s => ({ ...s, logo_url: null }));
+  };
     await supabase.from("businesses").update({
       name: draftSettings.name, google_link: draftSettings.google_link,
       yelp_link: draftSettings.yelp_link, message_template: draftSettings.message_template,
@@ -1359,6 +1384,32 @@ function BusinessApp({ data, onSignOut }) {
                   disabled={!editingSettings}
                   onChange={e => setDraftSettings(d => ({ ...d, message_template: e.target.value }))} />
               </div>
+
+              {/* Logo upload */}
+              <div style={{ marginBottom: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                <Label>Business Logo</Label>
+                <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginBottom: 10 }}>
+                  Your logo will automatically be sent with every review request as an image message.
+                </p>
+                {settings.logo_url ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: C.surfaceHover, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                    <img src={settings.logo_url} alt="Logo" style={{ width: 52, height: 52, borderRadius: 8, objectFit: "contain", background: "#fff", border: `1px solid ${C.border}` }} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: font.display, fontSize: 14, color: C.text, fontWeight: 600 }}>Logo uploaded ✅</div>
+                      <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 2 }}>Sent with every review request</div>
+                    </div>
+                    <button onClick={removeLogo} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontFamily: font.body, fontSize: 13 }}>Remove</button>
+                  </div>
+                ) : (
+                  <div>
+                    <input type="file" ref={logoInputRef} onChange={handleLogoUpload} accept="image/*" style={{ display: "none" }} />
+                    <button onClick={() => logoInputRef.current?.click()} disabled={logoUploading}
+                      style={{ ...ghostBtnStyle, width: "100%", textAlign: "center" }}>
+                      {logoUploading ? "Uploading…" : "🖼️ Upload Business Logo"}
+                    </button>
+                  </div>
+                )}
+              </div>
               <div style={{ display: "flex", gap: 12 }}>
                 {editingSettings ? (
                   <>
@@ -1470,11 +1521,15 @@ function BulkSendTab({ business, onComplete }) {
         .replace("{name}", contact.name)
         .replace("{business}", business.name)
         .replace("{link}", link);
+      const endpoint = business.logo_url ? "/send-mms" : "/send-sms";
+      const bodyData = business.logo_url
+        ? JSON.stringify({ to: "+1" + contact.phone, message, mediaUrl: business.logo_url })
+        : JSON.stringify({ to: "+1" + contact.phone, message });
       try {
-        const response = await fetch("https://reviewsend-server-production.up.railway.app/send-sms", {
+        const response = await fetch(`https://reviewsend-server-production.up.railway.app${endpoint}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to: "+1" + contact.phone, message }),
+          body: bodyData,
         });
         const result = await response.json();
         if (result.success) {
