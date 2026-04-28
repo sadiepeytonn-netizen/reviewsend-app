@@ -403,6 +403,7 @@ function MarketingDashboard({ data, onSignOut }) {
   const [newAM, setNewAM] = useState({ name: "", email: "" });
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -420,6 +421,12 @@ function MarketingDashboard({ data, onSignOut }) {
       if (ids.length > 0) {
         const { data: msgs } = await supabase.from("messages").select("*").in("business_id", ids).order("sent_at", { ascending: false });
         if (msgs) setMessages(msgs);
+        const { data: photos } = await supabase.from("photos").select("business_id, status").in("business_id", ids).eq("status", "pending");
+        if (photos) {
+          const counts = {};
+          photos.forEach(p => { counts[p.business_id] = (counts[p.business_id] || 0) + 1; });
+          setPendingPhotosByBiz(counts);
+        }
       }
     }
     const { data: ams } = await supabase.from("account_managers").select("*").eq("marketing_company_id", data.id);
@@ -677,7 +684,14 @@ function MarketingDashboard({ data, onSignOut }) {
                     onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{b.name.charAt(0)}</div>
+                        <div style={{ position: "relative" }}>
+                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{b.name.charAt(0)}</div>
+                          {pendingPhotosByBiz[b.id] > 0 && (
+                            <div style={{ position: "absolute", top: -4, right: -4, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 10, fontWeight: "bold", border: "2px solid #0D1117" }}>
+                              {pendingPhotosByBiz[b.id] > 9 ? "9+" : pendingPhotosByBiz[b.id]}
+                            </div>
+                          )}
+                        </div>
                         <div>
                           <div style={{ fontFamily: font.display, fontSize: 16, color: C.text, fontWeight: 600 }}>{b.name}</div>
                           <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted, marginTop: 3 }}>{b.email}</div>
@@ -930,7 +944,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
                     style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selectedBizTab === id ? C.gold : "none", color: selectedBizTab === id ? "#fff" : C.textMuted, fontFamily: font.body, fontSize: 14, fontWeight: selectedBizTab === id ? 600 : 400, cursor: "pointer", position: "relative" }}>
                     {label}
                     {pendingCount > 0 && (
-                      <span style={{ position: "absolute", top: 4, right: 8, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 16, height: 16, display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 9, fontWeight: "bold", border: "2px solid #fff" }}>
+                      <span style={{ position: "absolute", top: 4, right: 8, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 16, height: 16, display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 9, fontWeight: "bold", border: "2px solid #0D1117" }}>
                         {pendingCount > 9 ? "9+" : pendingCount}
                       </span>
                     )}
@@ -1048,7 +1062,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
                         <div style={{ position: "relative" }}>
                           <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", flexShrink: 0 }}>{b.name.charAt(0)}</div>
                           {pendingPhotosByBiz[b.id] > 0 && (
-                            <div style={{ position: "absolute", top: -4, right: -4, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 10, fontWeight: "bold", border: "2px solid #fff" }}>
+                            <div style={{ position: "absolute", top: -4, right: -4, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 10, fontWeight: "bold", border: "2px solid #0D1117" }}>
                               {pendingPhotosByBiz[b.id] > 9 ? "9+" : pendingPhotosByBiz[b.id]}
                             </div>
                           )}
@@ -1379,7 +1393,7 @@ function BusinessApp({ data, onSignOut }) {
             <div style={{ position: "relative", display: "inline-block" }}>
               <span style={{ fontSize: 20, lineHeight: 1 }}>{item.icon}</span>
               {item.id === "photos" && pendingPhotoCount > 0 && (
-                <div style={{ position: "absolute", top: -6, right: -8, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 10, fontWeight: "bold", border: "2px solid #fff" }}>
+                <div style={{ position: "absolute", top: -6, right: -8, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 10, fontWeight: "bold", border: "2px solid #0D1117" }}>
                   {pendingPhotoCount > 9 ? "9+" : pendingPhotoCount}
                 </div>
               )}
