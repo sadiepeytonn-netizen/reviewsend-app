@@ -604,7 +604,7 @@ function MarketingDashboard({ data, onSignOut }) {
             })()}
 
             {selectedBizTab === "photos" && (
-              <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} isMarketing={true} />
+              <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} isMarketing={true} onStatusChange={loadData} />
             )}
 
             {selectedBizTab === "history" && (
@@ -997,7 +997,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
             })()}
 
             {selectedBizTab === "photos" && (
-              <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} isMarketing={true} />
+              <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} isMarketing={true} onStatusChange={loadData} />
             )}
 
             {selectedBizTab === "history" && (
@@ -1530,7 +1530,7 @@ function timeAgo(dateStr) {
 }
 
 // ── PHOTOS TAB ────────────────────────────────────────────────────────────────
-function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = false }) {
+function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = false, onStatusChange = null }) {
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [caption, setCaption] = useState("");
@@ -1572,6 +1572,7 @@ function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = fa
     if (status === "posted") updates.posted_at = new Date().toISOString();
     await supabase.from("photos").update(updates).eq("id", id);
     loadPhotos();
+    if (onStatusChange) onStatusChange();
   };
 
   const downloadPhoto = async (photo) => {
