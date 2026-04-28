@@ -551,10 +551,10 @@ function MarketingDashboard({ data, onSignOut }) {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}` }}>
-              {[["analytics","📊 Analytics"],["photos","📸 Photos"],["history","📋 History"]].map(([id, label]) => (
+            <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}`, flexWrap: "wrap" }}>
+              {[["analytics","📊 Analytics"],["photos","📸 Photos"],["bulk","📤 Bulk Send"],["history","📋 History"]].map(([id, label]) => (
                 <button key={id} onClick={() => setSelectedBizTab(id)}
-                  style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selectedBizTab === id ? C.gold : "none", color: selectedBizTab === id ? "#fff" : C.textMuted, fontFamily: font.body, fontSize: 14, fontWeight: selectedBizTab === id ? 600 : 400, cursor: "pointer" }}>
+                  style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selectedBizTab === id ? C.gold : "none", color: selectedBizTab === id ? "#fff" : C.textMuted, fontFamily: font.body, fontSize: 13, fontWeight: selectedBizTab === id ? 600 : 400, cursor: "pointer", minWidth: 80 }}>
                   {label}
                 </button>
               ))}
@@ -631,6 +631,10 @@ function MarketingDashboard({ data, onSignOut }) {
                   <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No messages sent yet.</div>
                 )}
               </div>
+            )}
+
+            {selectedBizTab === "bulk" && (
+              <BulkSendTab business={selectedBusiness} onComplete={loadData} />
             )}
           </div>
         )}
@@ -936,12 +940,12 @@ function AccountManagerDashboard({ data, onSignOut }) {
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}` }}>
-              {[["analytics","📊 Analytics"],["photos","📸 Photos"],["history","📋 History"]].map(([id, label]) => {
+            <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}`, flexWrap: "wrap" }}>
+              {[["analytics","📊 Analytics"],["photos","📸 Photos"],["bulk","📤 Bulk Send"],["history","📋 History"]].map(([id, label]) => {
                 const pendingCount = id === "photos" ? (pendingPhotosByBiz[selectedBusiness.id] || 0) : 0;
                 return (
                   <button key={id} onClick={() => setSelectedBizTab(id)}
-                    style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selectedBizTab === id ? C.gold : "none", color: selectedBizTab === id ? "#fff" : C.textMuted, fontFamily: font.body, fontSize: 14, fontWeight: selectedBizTab === id ? 600 : 400, cursor: "pointer", position: "relative" }}>
+                    style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selectedBizTab === id ? C.gold : "none", color: selectedBizTab === id ? "#fff" : C.textMuted, fontFamily: font.body, fontSize: 13, fontWeight: selectedBizTab === id ? 600 : 400, cursor: "pointer", position: "relative", minWidth: 80 }}>
                     {label}
                     {pendingCount > 0 && (
                       <span style={{ position: "absolute", top: 4, right: 8, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 16, height: 16, display: "inline-flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 9, fontWeight: "bold", border: "2px solid #0D1117" }}>
@@ -1024,6 +1028,10 @@ function AccountManagerDashboard({ data, onSignOut }) {
                   <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No messages yet.</div>
                 )}
               </div>
+            )}
+
+            {selectedBizTab === "bulk" && (
+              <BulkSendTab business={selectedBusiness} onComplete={loadData} />
             )}
           </div>
         )}
@@ -1403,6 +1411,237 @@ function BusinessApp({ data, onSignOut }) {
           </button>
         ))}
       </div>
+    </div>
+  );
+}
+
+// ── BULK SEND TAB ─────────────────────────────────────────────────────────────
+function BulkSendTab({ business, onComplete }) {
+  const [step, setStep] = useState("upload"); // upload | preview | sending | done
+  const [contacts, setContacts] = useState([]);
+  const [platform, setPlatform] = useState("google");
+  const [sending, setSending] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [results, setResults] = useState({ sent: 0, failed: 0 });
+  const fileInputRef = useRef(null);
+
+  const parseCSV = (text) => {
+    const lines = text.trim().split("\n");
+    const parsed = [];
+    lines.forEach((line, i) => {
+      if (i === 0 && line.toLowerCase().includes("name")) return; // skip header
+      const parts = line.split(",");
+      if (parts.length >= 2) {
+        const name = parts[0].trim();
+        const phone = parts[1].trim().replace(/\D/g, "");
+        const valid = phone.length >= 10;
+        parsed.push({ name, phone, valid, id: i });
+      }
+    });
+    return parsed;
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const parsed = parseCSV(ev.target.result);
+      setContacts(parsed);
+      setStep("preview");
+    };
+    reader.readAsText(file);
+  };
+
+  const removeContact = (id) => {
+    setContacts(c => c.filter(x => x.id !== id));
+  };
+
+  const handleBulkSend = async () => {
+    setSending(true);
+    setStep("sending");
+    const validContacts = contacts.filter(c => c.valid);
+    let sent = 0, failed = 0;
+    const link = platform === "google" ? business.google_link : business.yelp_link;
+
+    for (let i = 0; i < validContacts.length; i++) {
+      const contact = validContacts[i];
+      const message = (business.message_template || "Hi {name}! Thanks for visiting {business}. Leave us a review here: {link} 🙏")
+        .replace("{name}", contact.name)
+        .replace("{business}", business.name)
+        .replace("{link}", link);
+      try {
+        const response = await fetch("https://reviewsend-server-production.up.railway.app/send-sms", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to: "+1" + contact.phone, message }),
+        });
+        const result = await response.json();
+        if (result.success) {
+          await supabase.from("messages").insert([{
+            business_id: business.id,
+            customer_name: contact.name,
+            customer_phone: "+1" + contact.phone,
+            platform: platform === "google" ? "Google" : "Yelp",
+          }]);
+          sent++;
+        } else { failed++; }
+      } catch { failed++; }
+      setProgress(Math.round(((i + 1) / validContacts.length) * 100));
+      await new Promise(r => setTimeout(r, 300)); // small delay between sends
+    }
+
+    await supabase.from("bulk_sends").insert([{
+      business_id: business.id,
+      sent_by: "account_manager",
+      total_contacts: validContacts.length,
+      sent_count: sent,
+      failed_count: failed,
+      platform: platform === "google" ? "Google" : "Yelp",
+    }]);
+
+    setResults({ sent, failed });
+    setSending(false);
+    setStep("done");
+    if (onComplete) onComplete();
+  };
+
+  const downloadTemplate = () => {
+    const csv = "Name,Phone\nSarah Johnson,9545551234\nJohn Smith,3054449876";
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "reviewsend-template.csv"; a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const validCount = contacts.filter(c => c.valid).length;
+  const invalidCount = contacts.filter(c => !c.valid).length;
+
+  return (
+    <div>
+      {/* UPLOAD STEP */}
+      {step === "upload" && (
+        <div>
+          <div style={{ ...card, marginBottom: 16 }}>
+            <div style={{ fontFamily: font.display, fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 8 }}>📤 Bulk Send Review Requests</div>
+            <p style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, lineHeight: 1.6, marginBottom: 20 }}>
+              Upload a CSV file with customer names and phone numbers. Everyone on the list will automatically receive a review request text for {business.name}.
+            </p>
+
+            <div style={{ marginBottom: 16 }}>
+              <Label>Review Platform</Label>
+              <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+                {PLATFORMS.map(p => (
+                  <button key={p.id} onClick={() => setPlatform(p.id)}
+                    style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderRadius: 10, border: `1.5px solid ${platform === p.id ? p.color : C.border}`, background: platform === p.id ? p.color + "18" : C.bg, cursor: "pointer", fontFamily: font.body, fontSize: 15, color: platform === p.id ? p.color : C.textMuted, fontWeight: platform === p.id ? 600 : 400 }}>
+                    <span style={{ width: 26, height: 26, borderRadius: 7, background: p.color, color: "#fff", fontSize: 12, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>{p.icon}</span>
+                    {p.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <input type="file" ref={fileInputRef} onChange={handleFileUpload} accept=".csv" style={{ display: "none" }} />
+            <button onClick={() => fileInputRef.current?.click()} style={{ ...btnStyle, marginBottom: 12 }}>
+              📂 Upload CSV File
+            </button>
+          </div>
+
+          <div style={{ ...card, background: C.surfaceHover }}>
+            <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 12, fontWeight: 700 }}>CSV Format Required</div>
+            <div style={{ fontFamily: font.mono, fontSize: 12, color: C.text, background: C.bg, padding: "12px 14px", borderRadius: 8, border: `1px solid ${C.border}`, marginBottom: 12, lineHeight: 1.8 }}>
+              Name,Phone<br/>
+              Sarah Johnson,9545551234<br/>
+              John Smith,3054449876<br/>
+              Maria Garcia,7865553210
+            </div>
+            <button onClick={downloadTemplate} style={{ ...ghostBtnStyle, fontSize: 13, padding: "8px 16px" }}>
+              ⬇️ Download Template
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* PREVIEW STEP */}
+      {step === "preview" && (
+        <div>
+          <div style={{ ...card, marginBottom: 16, padding: "20px 24px" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+              <div style={{ fontFamily: font.display, fontSize: 18, fontWeight: 600, color: C.text }}>📋 Preview — {contacts.length} contacts</div>
+              <button onClick={() => { setContacts([]); setStep("upload"); }} style={{ ...ghostBtnStyle, padding: "8px 16px", fontSize: 13 }}>← Re-upload</button>
+            </div>
+            <div style={{ display: "flex", gap: 12, marginBottom: 16 }}>
+              <div style={{ flex: 1, background: C.greenBg, border: `1px solid ${C.green}33`, borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
+                <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: C.green }}>{validCount}</div>
+                <div style={{ fontFamily: font.body, fontSize: 12, color: C.green }}>Ready to send</div>
+              </div>
+              {invalidCount > 0 && (
+                <div style={{ flex: 1, background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 10, padding: "12px 16px", textAlign: "center" }}>
+                  <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: "#C2410C" }}>{invalidCount}</div>
+                  <div style={{ fontFamily: font.body, fontSize: 12, color: "#C2410C" }}>Will be skipped</div>
+                </div>
+              )}
+            </div>
+            <button onClick={handleBulkSend} disabled={validCount === 0} style={{ ...btnStyle, width: "100%" }}>
+              🚀 Send to {validCount} Contacts
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflowY: "auto" }}>
+            {contacts.map((c, i) => (
+              <div key={i} style={{ ...card, padding: "12px 16px", opacity: c.valid ? 1 : 0.6, border: `1px solid ${c.valid ? C.border : "#FED7AA"}` }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <span style={{ fontSize: 14 }}>{c.valid ? "✅" : "⚠️"}</span>
+                    <div>
+                      <div style={{ fontFamily: font.display, fontSize: 14, color: C.text, fontWeight: 600 }}>{c.name}</div>
+                      <div style={{ fontFamily: font.mono, fontSize: 11, color: c.valid ? C.textMuted : "#C2410C" }}>
+                        {c.valid ? `+1${c.phone}` : "Invalid number — will be skipped"}
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => removeContact(c.id)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* SENDING STEP */}
+      {step === "sending" && (
+        <div style={{ ...card, textAlign: "center", padding: "48px 32px" }}>
+          <div style={{ fontSize: 48, marginBottom: 20 }}>📤</div>
+          <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text, marginBottom: 8 }}>Sending Messages...</div>
+          <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, marginBottom: 28 }}>Please don't close this page</div>
+          <div style={{ background: C.border, borderRadius: 99, height: 10, overflow: "hidden", marginBottom: 12 }}>
+            <div style={{ height: "100%", width: `${progress}%`, background: `linear-gradient(90deg, ${C.gold}, #0d3d8a)`, borderRadius: 99, transition: "width 0.3s" }} />
+          </div>
+          <div style={{ fontFamily: font.mono, fontSize: 14, color: C.textMuted }}>{progress}% complete</div>
+        </div>
+      )}
+
+      {/* DONE STEP */}
+      {step === "done" && (
+        <div style={{ ...card, textAlign: "center", padding: "48px 32px" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🎉</div>
+          <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 600, color: C.text, marginBottom: 8 }}>Bulk Send Complete!</div>
+          <div style={{ display: "flex", gap: 16, justifyContent: "center", margin: "20px 0 28px" }}>
+            <div style={{ background: C.greenBg, border: `1px solid ${C.green}33`, borderRadius: 12, padding: "16px 24px", textAlign: "center" }}>
+              <div style={{ fontFamily: font.display, fontSize: 32, fontWeight: 700, color: C.green }}>{results.sent}</div>
+              <div style={{ fontFamily: font.body, fontSize: 13, color: C.green }}>Sent</div>
+            </div>
+            {results.failed > 0 && (
+              <div style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 12, padding: "16px 24px", textAlign: "center" }}>
+                <div style={{ fontFamily: font.display, fontSize: 32, fontWeight: 700, color: "#C2410C" }}>{results.failed}</div>
+                <div style={{ fontFamily: font.body, fontSize: 13, color: "#C2410C" }}>Failed</div>
+              </div>
+            )}
+          </div>
+          <button onClick={() => { setStep("upload"); setContacts([]); setProgress(0); }} style={{ ...ghostBtnStyle }}>Send Another Batch</button>
+        </div>
+      )}
     </div>
   );
 }
