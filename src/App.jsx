@@ -898,6 +898,28 @@ function AccountManagerDashboard({ data, onSignOut }) {
                   <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>total texts sent</div>
                 </div>
               </div>
+
+              {/* Feature toggles */}
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                <Label>Enabled Features</Label>
+                <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                  {[["photos","📸 Photos"],["analytics","📊 Analytics"]].map(([key, label]) => {
+                    const isOn = (selectedBusiness.features || {})[key] || false;
+                    return (
+                      <button key={key} onClick={async () => {
+                        const currentFeatures = selectedBusiness.features || { reviews: true, photos: false, analytics: false };
+                        const newFeatures = { ...currentFeatures, [key]: !isOn };
+                        await supabase.from("businesses").update({ features: newFeatures }).eq("id", selectedBusiness.id);
+                        setSelectedBusiness(b => ({ ...b, features: newFeatures }));
+                        loadData();
+                      }}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 99, border: `1.5px solid ${isOn ? C.green : C.border}`, background: isOn ? C.greenBg : C.bg, color: isOn ? C.green : C.textMuted, fontFamily: font.body, fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}>
+                        <span>{isOn ? "✅" : "🔒"}</span> {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}` }}>
