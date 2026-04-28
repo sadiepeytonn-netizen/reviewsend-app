@@ -1230,6 +1230,8 @@ function BusinessApp({ data, onSignOut }) {
     await supabase.from("businesses").update({ logo_url: null }).eq("id", data.id);
     setSettings(s => ({ ...s, logo_url: null }));
   };
+
+  const saveSettings = async () => {
     await supabase.from("businesses").update({
       name: draftSettings.name, google_link: draftSettings.google_link,
       yelp_link: draftSettings.yelp_link, message_template: draftSettings.message_template,
