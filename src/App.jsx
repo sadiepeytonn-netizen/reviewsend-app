@@ -520,6 +520,28 @@ function MarketingDashboard({ data, onSignOut }) {
                   {accountManagers.map(am => <option key={am.id} value={am.id}>{am.name}</option>)}
                 </select>
               </div>
+
+              {/* Feature toggles */}
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                <Label>Enabled Features</Label>
+                <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
+                  {[["photos","📸 Photos"],["analytics","📊 Analytics"]].map(([key, label]) => {
+                    const isOn = (selectedBusiness.features || {})[key] || false;
+                    return (
+                      <button key={key} onClick={async () => {
+                        const currentFeatures = selectedBusiness.features || { reviews: true, photos: false, analytics: false };
+                        const newFeatures = { ...currentFeatures, [key]: !isOn };
+                        await supabase.from("businesses").update({ features: newFeatures }).eq("id", selectedBusiness.id);
+                        setSelectedBusiness(b => ({ ...b, features: newFeatures }));
+                        loadData();
+                      }}
+                        style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 99, border: `1.5px solid ${isOn ? C.green : C.border}`, background: isOn ? C.greenBg : C.bg, color: isOn ? C.green : C.textMuted, fontFamily: font.body, fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}>
+                        <span>{isOn ? "✅" : "🔒"}</span> {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}` }}>
@@ -1147,11 +1169,13 @@ function BusinessApp({ data, onSignOut }) {
     setEditingSettings(false);
   };
 
+  const features = settings.features || { reviews: true, photos: false, analytics: false };
+
   const navItems = [
     { id: "send", icon: "✉", label: "Send" },
-    { id: "photos", icon: "📸", label: "Photos" },
+    { id: "photos", icon: "📸", label: "Photos", locked: !features.photos },
     { id: "log", icon: "📋", label: "History" },
-    { id: "analytics", icon: "📊", label: "Analytics" },
+    { id: "analytics", icon: "📊", label: "Analytics", locked: !features.analytics },
     { id: "settings", icon: "⚙", label: "Settings" },
   ];
 
@@ -1199,13 +1223,36 @@ function BusinessApp({ data, onSignOut }) {
               </div>
               <SendBtn onClick={handleSend} sending={sending} sent={sent} disabled={!phone || !customerName} />
             </div>
+
+            {/* Locked features widget */}
+            {(!features.photos || !features.analytics) && (
+              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 30, height: 30, borderRadius: "50%", background: C.surfaceHover, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>🔒</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: font.display, fontSize: 13, fontWeight: 600, color: C.text }}>Features Locked</div>
+                  <div style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, marginTop: 1 }}>
+                    {[!features.photos && "Photos", !features.analytics && "Analytics"].filter(Boolean).join(" & ")} not enabled on your plan
+                  </div>
+                </div>
+                <div style={{ fontFamily: font.body, fontSize: 11, color: C.gold, fontWeight: 600, background: C.surfaceHover, border: `1px solid ${C.border}`, borderRadius: 99, padding: "5px 10px", whiteSpace: "nowrap", cursor: "pointer" }}>Contact Manager</div>
+              </div>
+            )}
           </div>
         )}
 
         {/* PHOTOS */}
         {tab === "photos" && (
-          <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "20px 24px 20px" }}>
-            <PhotosTab businessId={data.id} businessName={settings.name} />
+          <div style={{ position: "absolute", inset: 0, overflowY: features.photos ? "auto" : "hidden", padding: "20px 24px 20px" }}>
+            {features.photos ? (
+              <PhotosTab businessId={data.id} businessName={settings.name} />
+            ) : (
+              <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 24px" }}>
+                <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.4 }}>📸</div>
+                <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text, marginBottom: 8 }}>Photos Not Enabled</div>
+                <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, lineHeight: 1.6, marginBottom: 24 }}>Photo uploads are not included in your current plan. Contact your account manager to unlock this feature.</div>
+                <button style={{ ...btnStyle, width: "auto", padding: "12px 28px" }}>Contact Your Manager</button>
+              </div>
+            )}
           </div>
         )}
 
@@ -1287,7 +1334,16 @@ function BusinessApp({ data, onSignOut }) {
 
         {/* ANALYTICS */}
         {tab === "analytics" && (
-          <AnalyticsTab log={log} businessName={settings.name} />
+          features.analytics ? (
+            <AnalyticsTab log={log} businessName={settings.name} />
+          ) : (
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 24px" }}>
+              <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.4 }}>📊</div>
+              <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text, marginBottom: 8 }}>Analytics Not Enabled</div>
+              <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, lineHeight: 1.6, marginBottom: 24 }}>The analytics dashboard is not included in your current plan. Contact your account manager to unlock this feature.</div>
+              <button style={{ ...btnStyle, width: "auto", padding: "12px 28px" }}>Contact Your Manager</button>
+            </div>
+          )
         )}
 
       </div>
@@ -1296,7 +1352,8 @@ function BusinessApp({ data, onSignOut }) {
       <div style={{ background: C.surface, borderTop: `1px solid ${C.border}`, display: "flex", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom)" }}>
         {navItems.map(item => (
           <button key={item.id} onClick={() => { setTab(item.id); if (item.id === "photos") loadPendingPhotos(); }}
-            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 0 8px", background: "none", border: "none", cursor: "pointer", gap: 4, transition: "all 0.15s", position: "relative" }}>
+            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 0 8px", background: "none", border: "none", cursor: "pointer", gap: 4, transition: "all 0.15s", position: "relative", opacity: item.locked ? 0.4 : 1 }}>
+            {item.locked && <span style={{ position: "absolute", top: 4, right: "18%", fontSize: 8, color: C.textMuted }}>🔒</span>}
             <div style={{ position: "relative", display: "inline-block" }}>
               <span style={{ fontSize: 20, lineHeight: 1 }}>{item.icon}</span>
               {item.id === "photos" && pendingPhotoCount > 0 && (
