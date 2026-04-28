@@ -230,7 +230,7 @@ function SuperAdminDashboard({ onSignOut }) {
             </button>
             {menuOpen && (
               <div style={{ position: "absolute", right: 0, top: "calc(100% + 10px)", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, minWidth: 200, overflow: "hidden", boxShadow: "0 12px 40px rgba(13,17,23,0.12)" }}>
-                {[["companies","◈","Marketing Companies"],["businesses","◉","All Businesses"],["photos","📸","All Photos"]].map(([id,ico,label]) => (
+                {[["companies","◈","Marketing Companies"],["businesses","◉","All Businesses"],["photos","📸","All Photos"],["analytics","📊","Analytics"]].map(([id,ico,label]) => (
                   <button key={id} onClick={() => { setTab(id); setMenuOpen(false); }}
                     style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 18px", background: tab === id ? C.surfaceHover : "none", border: "none", color: tab === id ? C.gold : C.textMuted, cursor: "pointer", fontFamily: font.body, fontSize: 14, textAlign: "left" }}>
                     <span style={{ fontSize: 11, color: C.gold }}>{ico}</span>{label}
@@ -345,6 +345,39 @@ function SuperAdminDashboard({ onSignOut }) {
           <PhotosTab isAdmin={true} />
         )}
 
+        {tab === "analytics" && (
+          <div className="fade-up">
+            <PageHeader title="Analytics" sub="Performance across all companies and businesses" />
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
+              {[
+                { value: companies.length, label: "Marketing Companies", color: C.gold },
+                { value: businesses.length, label: "Total Businesses", color: "#4A90D9" },
+                { value: businesses.filter(b => { const now = new Date(); return true; }).length, label: "Active This Month", color: C.green },
+              ].map((s, i) => (
+                <div key={i} style={{ ...card, padding: "20px 16px", textAlign: "center" }}>
+                  <div style={{ fontFamily: font.display, fontSize: 36, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 8 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={card}>
+              <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 20, fontWeight: 700 }}>All Businesses</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                {businesses.map(b => (
+                  <div key={b.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 14, borderBottom: `1px solid ${C.border}` }}>
+                    <div>
+                      <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{b.name}</div>
+                      {b.marketing_companies && <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 2 }}>via {b.marketing_companies.name}</div>}
+                    </div>
+                    <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted }}>{b.email}</div>
+                  </div>
+                ))}
+                {businesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 20 }}>No businesses yet.</div>}
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );
@@ -357,6 +390,7 @@ function MarketingDashboard({ data, onSignOut }) {
   const [tab, setTab] = useState("clients");
   const [menuOpen, setMenuOpen] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState(null);
   const [newBiz, setNewBiz] = useState({ name: "", email: "", google_link: "", yelp_link: "" });
   const [saving, setSaving] = useState(false);
   const menuRef = useRef(null);
@@ -409,7 +443,7 @@ function MarketingDashboard({ data, onSignOut }) {
                   <div style={{ fontFamily: font.display, fontSize: 14, color: C.text }}>{data.name}</div>
                   <div style={{ fontFamily: font.body, fontSize: 11, color: C.gold, marginTop: 2, letterSpacing: 2 }}>MARKETING PARTNER</div>
                 </div>
-                {[["clients","◈","My Clients"],["activity","◉","All Activity"]].map(([id,ico,label]) => (
+                {[["clients","◈","My Clients"],["activity","◉","All Activity"],["analytics","📊","Analytics"]].map(([id,ico,label]) => (
                   <button key={id} onClick={() => { setTab(id); setMenuOpen(false); }}
                     style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 18px", background: tab === id ? C.surfaceHover : "none", border: "none", color: tab === id ? C.gold : C.textMuted, cursor: "pointer", fontFamily: font.body, fontSize: 14, textAlign: "left" }}>
                     <span style={{ fontSize: 11, color: C.gold }}>{ico}</span>{label}
@@ -451,21 +485,89 @@ function MarketingDashboard({ data, onSignOut }) {
 
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {businesses.map(b => (
-                <div key={b.id} style={{ ...card, padding: "20px 24px" }}>
+                <div key={b.id} onClick={() => setSelectedBusiness(b)}
+                  style={{ ...card, padding: "20px 24px", cursor: "pointer", transition: "transform 0.15s, box-shadow 0.15s" }}
+                  onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
+                  onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <div>
-                      <div style={{ fontFamily: font.display, fontSize: 17, color: C.text, fontWeight: 600 }}>{b.name}</div>
-                      <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted, marginTop: 4 }}>{b.email}</div>
-                    </div>
-                    <div style={{ textAlign: "right" }}>
-                      <div style={{ fontFamily: font.body, fontSize: 13, color: C.gold, fontWeight: 600 }}>
-                        {messages.filter(m => m.business_id === b.id).length} texts sent
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 16, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{b.name.charAt(0)}</div>
+                      <div>
+                        <div style={{ fontFamily: font.display, fontSize: 17, color: C.text, fontWeight: 600 }}>{b.name}</div>
+                        <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted, marginTop: 4 }}>{b.email}</div>
                       </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontFamily: font.body, fontSize: 13, color: C.gold, fontWeight: 600 }}>{messages.filter(m => m.business_id === b.id).length} texts sent</div>
+                      </div>
+                      <span style={{ color: C.textMuted, fontSize: 18 }}>›</span>
                     </div>
                   </div>
                 </div>
               ))}
               {businesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No clients yet. Add one above!</div>}
+            </div>
+          </div>
+        )}
+
+        {/* CLIENT DETAIL VIEW */}
+        {selectedBusiness && (
+          <div className="fade-up" style={{ position: "fixed", inset: 0, background: C.bg, zIndex: 200, overflowY: "auto" }}>
+            <div style={{ maxWidth: 900, margin: "0 auto", padding: "28px 28px 80px" }}>
+              <button onClick={() => setSelectedBusiness(null)}
+                style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", color: C.gold, cursor: "pointer", fontFamily: font.body, fontSize: 15, marginBottom: 24, padding: 0 }}>
+                ← Back to Clients
+              </button>
+
+              {/* Business header */}
+              <div style={{ ...card, marginBottom: 24, padding: "24px 28px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <div style={{ width: 52, height: 52, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 22, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{selectedBusiness.name.charAt(0)}</div>
+                  <div>
+                    <div style={{ fontFamily: font.display, fontSize: 22, color: C.text, fontWeight: 600 }}>{selectedBusiness.name}</div>
+                    <div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted, marginTop: 4 }}>{selectedBusiness.email}</div>
+                  </div>
+                  <div style={{ marginLeft: "auto", textAlign: "right" }}>
+                    <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: C.gold }}>{messages.filter(m => m.business_id === selectedBusiness.id).length}</div>
+                    <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>total texts sent</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Photos section */}
+              <div style={{ marginBottom: 28 }}>
+                <div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600, color: C.text, marginBottom: 16 }}>Photos</div>
+                <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} isAdmin={false} isMarketing={true} />
+              </div>
+
+              {/* Message history */}
+              <div>
+                <div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600, color: C.text, marginBottom: 16 }}>Message History</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {messages.filter(m => m.business_id === selectedBusiness.id).map((msg, i) => (
+                    <div key={i} style={{ ...card, padding: "16px 20px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{msg.customer_name.charAt(0)}</div>
+                          <div>
+                            <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{msg.customer_name}</div>
+                            <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{msg.customer_phone}</div>
+                          </div>
+                        </div>
+                        <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: C.greenBg, color: C.green, border: `1px solid ${C.green}33`, fontWeight: 600 }}>Delivered</span>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}>
+                        <span style={{ fontFamily: font.body, fontSize: 12, padding: "3px 10px", borderRadius: 99, background: msg.platform === "Google" ? "#4A90D918" : "#C0392B18", color: msg.platform === "Google" ? "#4A90D9" : "#e74c3c", border: `1px solid ${msg.platform === "Google" ? "#4A90D933" : "#C0392B33"}`, fontWeight: 600 }}>{msg.platform}</span>
+                        <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{new Date(msg.sent_at).toLocaleDateString()}</div>
+                      </div>
+                    </div>
+                  ))}
+                  {messages.filter(m => m.business_id === selectedBusiness.id).length === 0 && (
+                    <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No messages sent yet.</div>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -499,6 +601,63 @@ function MarketingDashboard({ data, onSignOut }) {
             </div>
           </div>
         )}
+
+        {tab === "analytics" && (
+          <div className="fade-up">
+            <PageHeader title="Analytics" sub="Performance across all your clients" />
+
+            {/* Top stats */}
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
+              {[
+                { value: messages.length, label: "Total Texts Sent", color: C.gold },
+                { value: businesses.length, label: "Active Clients", color: C.green },
+                { value: messages.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length, label: "Sent This Month", color: "#4A90D9" },
+              ].map((s, i) => (
+                <div key={i} style={{ ...card, padding: "20px 16px", textAlign: "center" }}>
+                  <div style={{ fontFamily: font.display, fontSize: 36, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                  <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 8 }}>{s.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Per business breakdown */}
+            <div style={card}>
+              <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 20, fontWeight: 700 }}>Client Activity Breakdown</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {businesses.map(biz => {
+                  const bizMessages = messages.filter(m => m.business_id === biz.id);
+                  const thisMonth = bizMessages.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); });
+                  const isActive = thisMonth.length > 0;
+                  const maxMsgs = Math.max(...businesses.map(b => messages.filter(m => m.business_id === b.id).length), 1);
+                  return (
+                    <div key={biz.id}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{biz.name.charAt(0)}</div>
+                          <div>
+                            <div style={{ fontFamily: font.display, fontSize: 14, color: C.text, fontWeight: 600 }}>{biz.name}</div>
+                            <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{thisMonth.length} sent this month</div>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <span style={{ fontFamily: font.body, fontSize: 12, fontWeight: 600, color: C.text }}>{bizMessages.length} total</span>
+                          <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: isActive ? C.greenBg : "#FFF3CD", color: isActive ? C.green : "#856404", border: `1px solid ${isActive ? C.green + "33" : "#FFC10733"}`, fontWeight: 600 }}>
+                            {isActive ? "Active" : "Inactive"}
+                          </span>
+                        </div>
+                      </div>
+                      <div style={{ height: 6, background: C.border, borderRadius: 99, overflow: "hidden" }}>
+                        <div style={{ height: "100%", width: `${Math.round((bizMessages.length / maxMsgs) * 100)}%`, background: isActive ? `linear-gradient(90deg, ${C.gold}, #0d3d8a)` : C.border, borderRadius: 99, transition: "width 0.5s" }} />
+                      </div>
+                    </div>
+                  );
+                })}
+                {businesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 20 }}>No clients yet.</div>}
+              </div>
+            </div>
+          </div>
+        )}
+
       </main>
     </div>
   );
@@ -516,12 +675,18 @@ function BusinessApp({ data, onSignOut }) {
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [log, setLog] = useState([]);
+  const [pendingPhotoCount, setPendingPhotoCount] = useState(0);
 
-  useEffect(() => { loadMessages(); }, []);
+  useEffect(() => { loadMessages(); loadPendingPhotos(); }, []);
 
   const loadMessages = async () => {
     const { data: msgs } = await supabase.from("messages").select("*").eq("business_id", data.id).order("sent_at", { ascending: false });
     if (msgs) setLog(msgs);
+  };
+
+  const loadPendingPhotos = async () => {
+    const { data: photos } = await supabase.from("photos").select("id").eq("business_id", data.id).eq("status", "pending");
+    if (photos) setPendingPhotoCount(photos.length);
   };
 
   const formatPhone = (raw) => "+1" + raw.replace(/\D/g, "");
@@ -711,9 +876,16 @@ function BusinessApp({ data, onSignOut }) {
       {/* Bottom Nav */}
       <div style={{ background: C.surface, borderTop: `1px solid ${C.border}`, display: "flex", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom)" }}>
         {navItems.map(item => (
-          <button key={item.id} onClick={() => setTab(item.id)}
-            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 0 8px", background: "none", border: "none", cursor: "pointer", gap: 4, transition: "all 0.15s" }}>
-            <span style={{ fontSize: 20, lineHeight: 1 }}>{item.icon}</span>
+          <button key={item.id} onClick={() => { setTab(item.id); if (item.id === "photos") loadPendingPhotos(); }}
+            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 0 8px", background: "none", border: "none", cursor: "pointer", gap: 4, transition: "all 0.15s", position: "relative" }}>
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <span style={{ fontSize: 20, lineHeight: 1 }}>{item.icon}</span>
+              {item.id === "photos" && pendingPhotoCount > 0 && (
+                <div style={{ position: "absolute", top: -6, right: -8, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 10, fontWeight: "bold", border: "2px solid #fff" }}>
+                  {pendingPhotoCount > 9 ? "9+" : pendingPhotoCount}
+                </div>
+              )}
+            </div>
             <span style={{ fontFamily: font.body, fontSize: 11, fontWeight: tab === item.id ? 700 : 400, color: tab === item.id ? C.gold : C.textMuted, letterSpacing: 0.5 }}>{item.label}</span>
             {tab === item.id && <div style={{ width: 4, height: 4, borderRadius: "50%", background: C.gold, marginTop: 2 }} />}
           </button>
@@ -827,8 +999,26 @@ function AnalyticsTab({ log, businessName }) {
   );
 }
 
+// ── TIME AGO HELPER ───────────────────────────────────────────────────────────
+function timeAgo(dateStr) {
+  const now = new Date();
+  const then = new Date(dateStr);
+  const seconds = Math.floor((now - then) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  const weeks = Math.floor(days / 7);
+  if (weeks < 4) return `${weeks}w ago`;
+  const months = Math.floor(days / 30);
+  return `${months}mo ago`;
+}
+
 // ── PHOTOS TAB ────────────────────────────────────────────────────────────────
-function PhotosTab({ businessId, businessName, isAdmin = false }) {
+function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = false }) {
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [caption, setCaption] = useState("");
@@ -931,15 +1121,15 @@ function PhotosTab({ businessId, businessName, isAdmin = false }) {
                   <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{photo.file_name}</div>
                   {isAdmin && photo.businesses && <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 2 }}>{photo.businesses.name}</div>}
                   {photo.caption && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 2 }}>{photo.caption}</div>}
-                  <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textSub, marginTop: 4 }}>{new Date(photo.created_at).toLocaleDateString()}</div>
+                  <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textSub, marginTop: 4 }}>{timeAgo(photo.created_at)}</div>
                 </div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 {statusBadge(photo.status)}
-                {isAdmin && (
+                {(isAdmin || isMarketing) && (
                   <>
                     <button onClick={() => downloadPhoto(photo)} style={{ ...ghostBtnStyle, padding: "8px 16px", fontSize: 13 }}>⬇️ Download</button>
-                    {photo.status !== "posted" && (
+                    {isAdmin && photo.status !== "posted" && (
                       <button onClick={() => updateStatus(photo.id, "posted")} style={{ ...btnStyle, padding: "8px 16px", fontSize: 13 }}>✅ Mark as Posted</button>
                     )}
                   </>
