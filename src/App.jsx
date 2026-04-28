@@ -773,9 +773,10 @@ function MarketingDashboard({ data, onSignOut }) {
 function AccountManagerDashboard({ data, onSignOut }) {
   const [businesses, setBusinesses] = useState([]);
   const [messages, setMessages] = useState([]);
-  const [photos, setPhotos] = useState([]);
   const [tab, setTab] = useState("clients");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [selectedBusiness, setSelectedBusiness] = useState(null);
+  const [selectedBizTab, setSelectedBizTab] = useState("analytics");
   const menuRef = useRef(null);
 
   useEffect(() => {
@@ -786,44 +787,16 @@ function AccountManagerDashboard({ data, onSignOut }) {
   }, []);
 
   const loadData = async () => {
-    const { data: biz } = await supabase.from("businesses").select("*").eq("marketing_company_id", data.marketing_company_id).order("created_at", { ascending: false });
+    const { data: biz } = await supabase.from("businesses").select("*").eq("account_manager_id", data.id).order("created_at", { ascending: false });
     if (biz) {
       setBusinesses(biz);
       const ids = biz.map(b => b.id);
       if (ids.length > 0) {
         const { data: msgs } = await supabase.from("messages").select("*").in("business_id", ids).order("sent_at", { ascending: false });
         if (msgs) setMessages(msgs);
-        const { data: ph } = await supabase.from("photos").select("*, businesses(name)").in("business_id", ids).order("created_at", { ascending: false });
-        if (ph) setPhotos(ph);
       }
     }
   };
-
-  const downloadPhoto = async (photo) => {
-    const { data: fileData } = await supabase.storage.from("business-photos").download(photo.file_path);
-    if (fileData) {
-      const url = URL.createObjectURL(fileData);
-      const a = document.createElement("a");
-      a.href = url; a.download = photo.file_name; a.click();
-      URL.revokeObjectURL(url);
-      await supabase.from("photos").update({ status: "downloaded", downloaded_at: new Date().toISOString() }).eq("id", photo.id);
-      loadData();
-    }
-  };
-
-  const markAsPosted = async (id) => {
-    await supabase.from("photos").update({ status: "posted", posted_at: new Date().toISOString() }).eq("id", id);
-    loadData();
-  };
-
-  const statusBadge = (status) => {
-    const styles = { pending: { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" }, downloaded: { bg: "#EFF6FF", color: "#1D4ED8", border: "#BFDBFE" }, posted: { bg: "#F0FDF4", color: "#15803D", border: "#BBF7D0" } };
-    const labels = { pending: "⬜ Pending", downloaded: "⬇️ Downloaded", posted: "✅ Posted to Google" };
-    const st = styles[status] || styles.pending;
-    return <span style={{ fontFamily: font.body, fontSize: 12, padding: "4px 12px", borderRadius: 99, background: st.bg, color: st.color, border: `1px solid ${st.border}`, fontWeight: 600 }}>{labels[status] || "⬜ Pending"}</span>;
-  };
-
-  const pendingPhotos = photos.filter(p => p.status === "pending").length;
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, color: C.text }}>
@@ -841,10 +814,10 @@ function AccountManagerDashboard({ data, onSignOut }) {
                   <div style={{ fontFamily: font.display, fontSize: 14, color: C.text }}>{data.name}</div>
                   <div style={{ fontFamily: font.body, fontSize: 11, color: C.gold, marginTop: 3, letterSpacing: 2 }}>ACCOUNT MANAGER</div>
                 </div>
-                {[["clients","◈","My Clients"],["photos","📸",`Photos${pendingPhotos > 0 ? ` (${pendingPhotos} new)` : ""}`],["activity","◉","Activity"],["analytics","📊","Analytics"]].map(([id,ico,label]) => (
-                  <button key={id} onClick={() => { setTab(id); setMenuOpen(false); }}
+                {[["clients","◈","My Clients"],["analytics","📊","Analytics"]].map(([id,ico,label]) => (
+                  <button key={id} onClick={() => { setTab(id); setMenuOpen(false); setSelectedBusiness(null); }}
                     style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 18px", background: tab === id ? C.surfaceHover : "none", border: "none", color: tab === id ? C.gold : C.textMuted, cursor: "pointer", fontFamily: font.body, fontSize: 14, textAlign: "left" }}>
-                    <span style={{ fontSize: 11, color: tab === id ? C.gold : C.gold }}>{ico}</span>{label}
+                    <span style={{ fontSize: 11, color: C.gold }}>{ico}</span>{label}
                   </button>
                 ))}
                 <div style={{ borderTop: `1px solid ${C.border}` }}>
@@ -858,8 +831,113 @@ function AccountManagerDashboard({ data, onSignOut }) {
 
       <main style={{ maxWidth: 900, margin: "0 auto", padding: "44px 28px 80px" }}>
 
-        {/* CLIENTS */}
-        {tab === "clients" && (
+        {/* CLIENT DETAIL VIEW */}
+        {selectedBusiness && (
+          <div className="fade-up">
+            <button onClick={() => { setSelectedBusiness(null); setSelectedBizTab("analytics"); }}
+              style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", color: C.gold, cursor: "pointer", fontFamily: font.body, fontSize: 15, marginBottom: 24, padding: 0 }}>
+              ← Back to Clients
+            </button>
+            <div style={{ ...card, marginBottom: 24, padding: "24px 28px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 22, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{selectedBusiness.name.charAt(0)}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontFamily: font.display, fontSize: 22, color: C.text, fontWeight: 600 }}>{selectedBusiness.name}</div>
+                  <div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted, marginTop: 4 }}>{selectedBusiness.email}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: C.gold }}>{messages.filter(m => m.business_id === selectedBusiness.id).length}</div>
+                  <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>total texts sent</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}` }}>
+              {[["analytics","📊 Analytics"],["photos","📸 Photos"],["history","📋 History"]].map(([id, label]) => (
+                <button key={id} onClick={() => setSelectedBizTab(id)}
+                  style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selectedBizTab === id ? C.gold : "none", color: selectedBizTab === id ? "#fff" : C.textMuted, fontFamily: font.body, fontSize: 14, fontWeight: selectedBizTab === id ? 600 : 400, cursor: "pointer" }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {selectedBizTab === "analytics" && (() => {
+              const bizMsgs = messages.filter(m => m.business_id === selectedBusiness.id);
+              const now = new Date();
+              const thisMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
+              const lastMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); const lm = new Date(now.getFullYear(), now.getMonth() - 1); return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear(); });
+              const googleCount = bizMsgs.filter(m => m.platform === "Google").length;
+              const yelpCount = bizMsgs.filter(m => m.platform === "Yelp").length;
+              const total = bizMsgs.length;
+              const growth = lastMonth.length > 0 ? Math.round(((thisMonth.length - lastMonth.length) / lastMonth.length) * 100) : 0;
+              return (
+                <div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
+                    {[
+                      { value: total, label: "Total Sent", color: C.gold },
+                      { value: thisMonth.length, label: "This Month", sub: lastMonth.length > 0 ? `${growth >= 0 ? "+" : ""}${growth}% vs last month` : "", color: growth >= 0 ? C.green : "#e74c3c" },
+                      { value: googleCount, label: "Google Sent", color: "#4A90D9" },
+                    ].map((s, i) => (
+                      <div key={i} style={{ ...card, padding: "16px", textAlign: "center" }}>
+                        <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                        <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 6 }}>{s.label}</div>
+                        {s.sub && <div style={{ fontFamily: font.body, fontSize: 11, color: s.color, marginTop: 3 }}>{s.sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={card}>
+                    <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 16, fontWeight: 700 }}>Platform Split</div>
+                    {[{ label: "Google", count: googleCount, color: "#4A90D9" }, { label: "Yelp", count: yelpCount, color: "#C0392B" }].map(p => (
+                      <div key={p.label} style={{ marginBottom: 16 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                          <span style={{ fontFamily: font.body, fontSize: 14, color: C.text }}>{p.label}</span>
+                          <span style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{p.count} ({total > 0 ? Math.round((p.count / total) * 100) : 0}%)</span>
+                        </div>
+                        <div style={{ height: 8, background: C.border, borderRadius: 99, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${total > 0 ? Math.round((p.count / total) * 100) : 0}%`, background: p.color, borderRadius: 99 }} />
+                        </div>
+                      </div>
+                    ))}
+                    {total === 0 && <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, textAlign: "center", padding: 20 }}>No messages sent yet.</div>}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {selectedBizTab === "photos" && (
+              <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} isMarketing={true} />
+            )}
+
+            {selectedBizTab === "history" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {messages.filter(m => m.business_id === selectedBusiness.id).map((msg, i) => (
+                  <div key={i} style={{ ...card, padding: "16px 20px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{msg.customer_name.charAt(0)}</div>
+                        <div>
+                          <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{msg.customer_name}</div>
+                          <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{msg.customer_phone}</div>
+                        </div>
+                      </div>
+                      <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: C.greenBg, color: C.green, border: `1px solid ${C.green}33`, fontWeight: 600 }}>Delivered</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ fontFamily: font.body, fontSize: 12, padding: "3px 10px", borderRadius: 99, background: msg.platform === "Google" ? "#4A90D918" : "#C0392B18", color: msg.platform === "Google" ? "#4A90D9" : "#e74c3c", border: `1px solid ${msg.platform === "Google" ? "#4A90D933" : "#C0392B33"}`, fontWeight: 600 }}>{msg.platform}</span>
+                      <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{new Date(msg.sent_at).toLocaleDateString()}</div>
+                    </div>
+                  </div>
+                ))}
+                {messages.filter(m => m.business_id === selectedBusiness.id).length === 0 && (
+                  <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No messages yet.</div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CLIENTS LIST */}
+        {!selectedBusiness && tab === "clients" && (
           <div className="fade-up">
             <PageHeader title="My Clients" sub={`${businesses.length} businesses assigned to you`} />
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -868,91 +946,36 @@ function AccountManagerDashboard({ data, onSignOut }) {
                 const thisMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); });
                 const isActive = thisMonth.length > 0;
                 return (
-                  <div key={b.id} style={{ ...card, padding: "20px 24px" }}>
+                  <div key={b.id} onClick={() => { setSelectedBusiness(b); setSelectedBizTab("analytics"); }}
+                    style={{ ...card, padding: "20px 24px", cursor: "pointer", transition: "all 0.2s" }}
+                    onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
+                    onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold" }}>{b.name.charAt(0)}</div>
+                        <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 18, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: "bold", flexShrink: 0 }}>{b.name.charAt(0)}</div>
                         <div>
                           <div style={{ fontFamily: font.display, fontSize: 16, color: C.text, fontWeight: 600 }}>{b.name}</div>
-                          <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted, marginTop: 2 }}>{b.email}</div>
+                          <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted, marginTop: 3 }}>{b.email}</div>
                         </div>
                       </div>
-                      <div style={{ textAlign: "right" }}>
-                        <span style={{ fontFamily: font.body, fontSize: 12, padding: "4px 12px", borderRadius: 99, background: isActive ? C.greenBg : "#FFF3CD", color: isActive ? C.green : "#856404", border: `1px solid ${isActive ? C.green + "33" : "#FFC10733"}`, fontWeight: 600 }}>{isActive ? "Active" : "Inactive"}</span>
-                        <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 6 }}>{bizMsgs.length} total · {thisMonth.length} this month</div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ textAlign: "right" }}>
+                          <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: isActive ? C.greenBg : "#FFF3CD", color: isActive ? C.green : "#856404", border: `1px solid ${isActive ? C.green + "33" : "#FFC10733"}`, fontWeight: 600 }}>{isActive ? "Active" : "Inactive"}</span>
+                          <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 6 }}>{bizMsgs.length} texts · {thisMonth.length} this month</div>
+                        </div>
+                        <span style={{ color: C.textMuted, fontSize: 20 }}>›</span>
                       </div>
                     </div>
                   </div>
                 );
               })}
-              {businesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No clients assigned yet.</div>}
-            </div>
-          </div>
-        )}
-
-        {/* PHOTOS */}
-        {tab === "photos" && (
-          <div className="fade-up">
-            <PageHeader title="Client Photos" sub={`${pendingPhotos} pending · ${photos.length} total`} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {photos.map((photo, i) => (
-                <div key={i} style={{ ...card, padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 10, background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>📸</div>
-                      <div>
-                        <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{photo.file_name}</div>
-                        {photo.businesses && <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 2 }}>{photo.businesses.name}</div>}
-                        {photo.caption && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 2 }}>{photo.caption}</div>}
-                        <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textSub, marginTop: 3 }}>{new Date(photo.created_at).toLocaleDateString()}</div>
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                      {statusBadge(photo.status)}
-                      <button onClick={() => downloadPhoto(photo)} style={{ ...ghostBtnStyle, padding: "8px 16px", fontSize: 13 }}>⬇️ Download</button>
-                      {photo.status !== "posted" && <button onClick={() => markAsPosted(photo.id)} style={{ ...btnStyle, padding: "8px 16px", fontSize: 13 }}>✅ Mark as Posted</button>}
-                    </div>
-                  </div>
-                </div>
-              ))}
-              {photos.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No photos uploaded yet.</div>}
-            </div>
-          </div>
-        )}
-
-        {/* ACTIVITY */}
-        {tab === "activity" && (
-          <div className="fade-up">
-            <PageHeader title="All Activity" sub={`${messages.length} messages sent`} />
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {messages.map((msg, i) => {
-                const biz = businesses.find(b => b.id === msg.business_id);
-                return (
-                  <div key={i} style={{ ...card, padding: "16px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 14, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>{msg.customer_name.charAt(0)}</div>
-                        <div>
-                          <div style={{ fontFamily: font.display, fontSize: 14, color: C.text, fontWeight: 600 }}>{msg.customer_name}</div>
-                          <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{msg.customer_phone}</div>
-                        </div>
-                      </div>
-                      <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: C.greenBg, color: C.green, border: `1px solid ${C.green}33`, fontWeight: 600 }}>Delivered</span>
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold }}>{biz?.name || "Unknown"}</div>
-                      <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{new Date(msg.sent_at).toLocaleDateString()}</div>
-                    </div>
-                  </div>
-                );
-              })}
-              {messages.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No activity yet.</div>}
+              {businesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No clients assigned yet. Contact your manager to get clients assigned.</div>}
             </div>
           </div>
         )}
 
         {/* ANALYTICS */}
-        {tab === "analytics" && (
+        {!selectedBusiness && tab === "analytics" && (
           <div className="fade-up">
             <PageHeader title="Analytics" sub="Performance across your assigned clients" />
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
@@ -976,15 +999,9 @@ function AccountManagerDashboard({ data, onSignOut }) {
                   const isActive = thisMonth.length > 0;
                   const maxMsgs = Math.max(...businesses.map(b => messages.filter(m => m.business_id === b.id).length), 1);
                   return (
-                    <div key={biz.id}>
+                    <div key={biz.id} onClick={() => { setSelectedBusiness(biz); setSelectedBizTab("analytics"); setTab("clients"); }} style={{ cursor: "pointer" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 13, display: "flex", alignItems: "center", justifyContent: "center" }}>{biz.name.charAt(0)}</div>
-                          <div>
-                            <div style={{ fontFamily: font.display, fontSize: 14, color: C.text, fontWeight: 600 }}>{biz.name}</div>
-                            <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{thisMonth.length} this month</div>
-                          </div>
-                        </div>
+                        <div style={{ fontFamily: font.display, fontSize: 14, color: C.text, fontWeight: 600 }}>{biz.name}</div>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <span style={{ fontFamily: font.body, fontSize: 12, fontWeight: 600, color: C.text }}>{bizMessages.length} total</span>
                           <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: isActive ? C.greenBg : "#FFF3CD", color: isActive ? C.green : "#856404", border: `1px solid ${isActive ? C.green + "33" : "#FFC10733"}`, fontWeight: 600 }}>{isActive ? "Active" : "Inactive"}</span>
@@ -996,6 +1013,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
                     </div>
                   );
                 })}
+                {businesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 20 }}>No clients assigned yet.</div>}
               </div>
             </div>
           </div>
@@ -1005,7 +1023,6 @@ function AccountManagerDashboard({ data, onSignOut }) {
     </div>
   );
 }
-
 // ── BUSINESS APP ──────────────────────────────────────────────────────────────
 function BusinessApp({ data, onSignOut }) {
   const [tab, setTab] = useState("send");
