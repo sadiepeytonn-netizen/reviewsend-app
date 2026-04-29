@@ -399,6 +399,7 @@ function MarketingDashboard({ data, onSignOut }) {
   const [showAddAM, setShowAddAM] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState(null);
   const [selectedBizTab, setSelectedBizTab] = useState("analytics");
+  const [selectedBizPhotos, setSelectedBizPhotos] = useState([]);
   const [newBiz, setNewBiz] = useState({ name: "", email: "", google_link: "", yelp_link: "" });
   const [newAM, setNewAM] = useState({ name: "", email: "" });
   const [saving, setSaving] = useState(false);
@@ -552,7 +553,7 @@ function MarketingDashboard({ data, onSignOut }) {
             </div>
 
             <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}`, flexWrap: "wrap" }}>
-              {[["analytics","📊 Analytics"],["photos","📸 Photos"],["bulk","📤 Bulk Send"],["history","📋 History"]].map(([id, label]) => (
+              {[["analytics","📊 Analytics"],["photos","📸 Photos"],["bulk","📤 Bulk Send"],["history","📋 History"],["settings","⚙️ Settings"]].map(([id, label]) => (
                 <button key={id} onClick={() => setSelectedBizTab(id)}
                   style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selectedBizTab === id ? C.gold : "none", color: selectedBizTab === id ? "#fff" : C.textMuted, fontFamily: font.body, fontSize: 13, fontWeight: selectedBizTab === id ? 600 : 400, cursor: "pointer", minWidth: 80 }}>
                   {label}
@@ -560,48 +561,14 @@ function MarketingDashboard({ data, onSignOut }) {
               ))}
             </div>
 
-            {selectedBizTab === "analytics" && (() => {
-              const bizMsgs = messages.filter(m => m.business_id === selectedBusiness.id);
-              const now = new Date();
-              const thisMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
-              const lastMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); const lm = new Date(now.getFullYear(), now.getMonth() - 1); return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear(); });
-              const googleCount = bizMsgs.filter(m => m.platform === "Google").length;
-              const yelpCount = bizMsgs.filter(m => m.platform === "Yelp").length;
-              const total = bizMsgs.length;
-              const growth = lastMonth.length > 0 ? Math.round(((thisMonth.length - lastMonth.length) / lastMonth.length) * 100) : 0;
-              return (
-                <div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
-                    {[
-                      { value: total, label: "Total Sent", color: C.gold },
-                      { value: thisMonth.length, label: "This Month", sub: lastMonth.length > 0 ? `${growth >= 0 ? "+" : ""}${growth}% vs last month` : "", color: growth >= 0 ? C.green : "#e74c3c" },
-                      { value: googleCount, label: "Google Sent", color: "#4A90D9" },
-                    ].map((s, i) => (
-                      <div key={i} style={{ ...card, padding: "16px", textAlign: "center" }}>
-                        <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                        <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 6 }}>{s.label}</div>
-                        {s.sub && <div style={{ fontFamily: font.body, fontSize: 11, color: s.color, marginTop: 3 }}>{s.sub}</div>}
-                      </div>
-                    ))}
-                  </div>
-                  <div style={card}>
-                    <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 16, fontWeight: 700 }}>Platform Split</div>
-                    {[{ label: "Google", count: googleCount, color: "#4A90D9" }, { label: "Yelp", count: yelpCount, color: "#C0392B" }].map(p => (
-                      <div key={p.label} style={{ marginBottom: 16 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                          <span style={{ fontFamily: font.body, fontSize: 14, color: C.text }}>{p.label}</span>
-                          <span style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{p.count} ({total > 0 ? Math.round((p.count / total) * 100) : 0}%)</span>
-                        </div>
-                        <div style={{ height: 8, background: C.border, borderRadius: 99, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${total > 0 ? Math.round((p.count / total) * 100) : 0}%`, background: p.color, borderRadius: 99 }} />
-                        </div>
-                      </div>
-                    ))}
-                    {total === 0 && <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, textAlign: "center", padding: 20 }}>No messages sent yet.</div>}
-                  </div>
-                </div>
-              );
-            })()}
+            {selectedBizTab === "analytics" && (
+              <AnalyticsTab
+                log={messages.filter(m => m.business_id === selectedBusiness.id)}
+                businessName={selectedBusiness.name}
+                photos={selectedBizPhotos || []}
+                socialLinks={selectedBusiness.social_links || {}}
+              />
+            )}
 
             {selectedBizTab === "photos" && (
               <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} isMarketing={true} onStatusChange={loadData} />
@@ -635,6 +602,14 @@ function MarketingDashboard({ data, onSignOut }) {
 
             {selectedBizTab === "bulk" && (
               <BulkSendTab business={selectedBusiness} onComplete={loadData} />
+            )}
+
+            {selectedBizTab === "settings" && (
+              <ClientSettingsTab business={selectedBusiness} onSave={async (links) => {
+                await supabase.from("businesses").update({ social_links: links }).eq("id", selectedBusiness.id);
+                setSelectedBusiness(b => ({ ...b, social_links: links }));
+                loadData();
+              }} />
             )}
           </div>
         )}
@@ -682,7 +657,7 @@ function MarketingDashboard({ data, onSignOut }) {
                 const isActive = thisMonth.length > 0;
                 const assignedAM = accountManagers.find(am => am.id === b.account_manager_id);
                 return (
-                  <div key={b.id} onClick={() => { setSelectedBusiness(b); setSelectedBizTab("analytics"); }}
+                  <div key={b.id} onClick={() => { setSelectedBusiness(b); setSelectedBizTab("analytics"); supabase.from("photos").select("*").eq("business_id", b.id).then(({data}) => setSelectedBizPhotos(data || [])); }}
                     style={{ ...card, padding: "20px 24px", cursor: "pointer", transition: "all 0.2s" }}
                     onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
                     onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
@@ -836,6 +811,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [selectedBusiness, setSelectedBusiness] = useState(null);
   const [selectedBizTab, setSelectedBizTab] = useState("analytics");
+  const [selectedBizPhotos, setSelectedBizPhotos] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const menuRef = useRef(null);
 
@@ -941,7 +917,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
             </div>
 
             <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}`, flexWrap: "wrap" }}>
-              {[["analytics","📊 Analytics"],["photos","📸 Photos"],["bulk","📤 Bulk Send"],["history","📋 History"]].map(([id, label]) => {
+              {[["analytics","📊 Analytics"],["photos","📸 Photos"],["bulk","📤 Bulk Send"],["history","📋 History"],["settings","⚙️ Settings"]].map(([id, label]) => {
                 const pendingCount = id === "photos" ? (pendingPhotosByBiz[selectedBusiness.id] || 0) : 0;
                 return (
                   <button key={id} onClick={() => setSelectedBizTab(id)}
@@ -957,48 +933,15 @@ function AccountManagerDashboard({ data, onSignOut }) {
               })}
             </div>
 
-            {selectedBizTab === "analytics" && (() => {
-              const bizMsgs = messages.filter(m => m.business_id === selectedBusiness.id);
-              const now = new Date();
-              const thisMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear(); });
-              const lastMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); const lm = new Date(now.getFullYear(), now.getMonth() - 1); return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear(); });
-              const googleCount = bizMsgs.filter(m => m.platform === "Google").length;
-              const yelpCount = bizMsgs.filter(m => m.platform === "Yelp").length;
-              const total = bizMsgs.length;
-              const growth = lastMonth.length > 0 ? Math.round(((thisMonth.length - lastMonth.length) / lastMonth.length) * 100) : 0;
-              return (
-                <div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 20 }}>
-                    {[
-                      { value: total, label: "Total Sent", color: C.gold },
-                      { value: thisMonth.length, label: "This Month", sub: lastMonth.length > 0 ? `${growth >= 0 ? "+" : ""}${growth}% vs last month` : "", color: growth >= 0 ? C.green : "#e74c3c" },
-                      { value: googleCount, label: "Google Sent", color: "#4A90D9" },
-                    ].map((s, i) => (
-                      <div key={i} style={{ ...card, padding: "16px", textAlign: "center" }}>
-                        <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                        <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 6 }}>{s.label}</div>
-                        {s.sub && <div style={{ fontFamily: font.body, fontSize: 11, color: s.color, marginTop: 3 }}>{s.sub}</div>}
-                      </div>
-                    ))}
-                  </div>
-                  <div style={card}>
-                    <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 16, fontWeight: 700 }}>Platform Split</div>
-                    {[{ label: "Google", count: googleCount, color: "#4A90D9" }, { label: "Yelp", count: yelpCount, color: "#C0392B" }].map(p => (
-                      <div key={p.label} style={{ marginBottom: 16 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                          <span style={{ fontFamily: font.body, fontSize: 14, color: C.text }}>{p.label}</span>
-                          <span style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{p.count} ({total > 0 ? Math.round((p.count / total) * 100) : 0}%)</span>
-                        </div>
-                        <div style={{ height: 8, background: C.border, borderRadius: 99, overflow: "hidden" }}>
-                          <div style={{ height: "100%", width: `${total > 0 ? Math.round((p.count / total) * 100) : 0}%`, background: p.color, borderRadius: 99 }} />
-                        </div>
-                      </div>
-                    ))}
-                    {total === 0 && <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, textAlign: "center", padding: 20 }}>No messages sent yet.</div>}
-                  </div>
-                </div>
-              );
-            })()}
+
+            {selectedBizTab === "analytics" && (
+              <AnalyticsTab
+                log={messages.filter(m => m.business_id === selectedBusiness.id)}
+                businessName={selectedBusiness.name}
+                photos={selectedBizPhotos || []}
+                socialLinks={selectedBusiness.social_links || {}}
+              />
+            )}
 
             {selectedBizTab === "photos" && (
               <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} isMarketing={true} onStatusChange={loadData} />
@@ -1033,7 +976,16 @@ function AccountManagerDashboard({ data, onSignOut }) {
             {selectedBizTab === "bulk" && (
               <BulkSendTab business={selectedBusiness} onComplete={loadData} />
             )}
+
+            {selectedBizTab === "settings" && (
+              <ClientSettingsTab business={selectedBusiness} onSave={async (links) => {
+                await supabase.from("businesses").update({ social_links: links }).eq("id", selectedBusiness.id);
+                setSelectedBusiness(b => ({ ...b, social_links: links }));
+                loadData();
+              }} />
+            )}
           </div>
+        )}
         )}
 
         {/* CLIENTS LIST */}
@@ -1061,7 +1013,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
                 const thisMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); });
                 const isActive = thisMonth.length > 0;
                 return (
-                  <div key={b.id} onClick={() => { setSelectedBusiness(b); setSelectedBizTab("analytics"); }}
+                  <div key={b.id} onClick={() => { setSelectedBusiness(b); setSelectedBizTab("analytics"); supabase.from("photos").select("*").eq("business_id", b.id).then(({data}) => setSelectedBizPhotos(data || [])); }}
                     style={{ ...card, padding: "20px 24px", cursor: "pointer", transition: "all 0.2s" }}
                     onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
                     onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
@@ -1468,6 +1420,56 @@ function BusinessApp({ data, onSignOut }) {
   );
 }
 
+// ── CLIENT SETTINGS TAB ───────────────────────────────────────────────────────
+function ClientSettingsTab({ business, onSave }) {
+  const [links, setLinks] = useState({
+    google: business.social_links?.google || "",
+    google_campaign: business.social_links?.google_campaign || "",
+    instagram: business.social_links?.instagram || "",
+    facebook: business.social_links?.facebook || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave(links);
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2500);
+  };
+
+  const fields = [
+    { key: "google", label: "Google Business Profile", placeholder: "https://g.page/r/...", color: "#4A90D9", abbr: "GP" },
+    { key: "google_campaign", label: "Google Campaign Link", placeholder: "https://ads.google.com/...", color: "#1A8C4E", abbr: "GC" },
+    { key: "instagram", label: "Instagram Page", placeholder: "https://instagram.com/yourbusiness", color: "#E1306C", abbr: "IG" },
+    { key: "facebook", label: "Facebook Page", placeholder: "https://facebook.com/yourbusiness", color: "#1877F2", abbr: "FB" },
+  ];
+
+  return (
+    <div>
+      <div style={{ ...card, marginBottom: 16 }}>
+        <div style={{ fontFamily: font.display, fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 8 }}>⚙️ Social Links</div>
+        <p style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, lineHeight: 1.6, marginBottom: 20 }}>
+          Add links for {business.name}. These power the analytics dashboard clickable boxes and let you jump directly to each platform to post photos.
+        </p>
+        {fields.map(f => (
+          <div key={f.key} style={{ marginBottom: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+              <div style={{ width: 28, height: 28, borderRadius: 7, background: f.color + "18", border: `1px solid ${f.color}44`, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 11, fontWeight: 700, color: f.color, flexShrink: 0 }}>{f.abbr}</div>
+              <Label>{f.label}</Label>
+            </div>
+            <input style={inputStyle} value={links[f.key]} onChange={e => setLinks(l => ({ ...l, [f.key]: e.target.value }))} placeholder={f.placeholder} />
+          </div>
+        ))}
+        <button onClick={handleSave} disabled={saving} style={{ ...btnStyle, width: "100%" }}>
+          {saved ? "✅ Saved!" : saving ? "Saving…" : "Save Links"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── BULK SEND TAB ─────────────────────────────────────────────────────────────
 function BulkSendTab({ business, onComplete }) {
   const [step, setStep] = useState("upload"); // upload | preview | sending | done
@@ -1727,26 +1729,27 @@ function BulkSendTab({ business, onComplete }) {
 }
 
 // ── ANALYTICS TAB ─────────────────────────────────────────────────────────────
-function AnalyticsTab({ log, businessName }) {
+function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavigate = null }) {
   const now = new Date();
   const thisMonth = log.filter(m => new Date(m.sent_at).getMonth() === now.getMonth() && new Date(m.sent_at).getFullYear() === now.getFullYear());
   const lastMonth = log.filter(m => { const d = new Date(m.sent_at); const lm = new Date(now.getFullYear(), now.getMonth() - 1); return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear(); });
   const googleCount = log.filter(m => m.platform === "Google").length;
   const yelpCount = log.filter(m => m.platform === "Yelp").length;
   const total = log.length;
-  const googlePct = total > 0 ? Math.round((googleCount / total) * 100) : 0;
-  const yelpPct = total > 0 ? Math.round((yelpCount / total) * 100) : 0;
   const growth = lastMonth.length > 0 ? Math.round(((thisMonth.length - lastMonth.length) / lastMonth.length) * 100) : 0;
+
+  // Photo post counts per platform
+  const gpCount = photos.filter(p => p.posted_platforms?.includes("google")).length;
+  const gcCount = photos.filter(p => p.posted_platforms?.includes("google_campaign")).length;
+  const igCount = photos.filter(p => p.posted_platforms?.includes("instagram")).length;
+  const fbCount = photos.filter(p => p.posted_platforms?.includes("facebook")).length;
 
   const getLast7Days = () => {
     const days = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const count = log.filter(m => {
-        const md = new Date(m.sent_at);
-        return md.toDateString() === d.toDateString();
-      }).length;
+      const count = log.filter(m => new Date(m.sent_at).toDateString() === d.toDateString()).length;
       days.push({ label: d.toLocaleDateString("en", { weekday: "short" }), count });
     }
     return days;
@@ -1755,11 +1758,25 @@ function AnalyticsTab({ log, businessName }) {
   const days = getLast7Days();
   const maxCount = Math.max(...days.map(d => d.count), 1);
 
-  const statCard = (value, label, sub, color = C.gold) => (
-    <div style={{ ...card, padding: "16px 18px", textAlign: "center" }}>
-      <div style={{ fontFamily: font.display, fontSize: 32, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 600, color: C.text, marginTop: 6 }}>{label}</div>
-      {sub && <div style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, marginTop: 3 }}>{sub}</div>}
+  const topCard = (value, label, sub, color) => (
+    <div style={{ ...card, padding: "16px", textAlign: "center" }}>
+      <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontFamily: font.body, fontSize: 12, fontWeight: 600, color: C.text, marginTop: 6 }}>{label}</div>
+      {sub && <div style={{ fontFamily: font.body, fontSize: 10, color: C.textMuted, marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
+
+  const postCard = (value, label, abbr, color, link) => (
+    <div onClick={() => link && window.open(link, "_blank")}
+      style={{ ...card, padding: "16px", textAlign: "center", cursor: link ? "pointer" : "default", transition: "all 0.2s", border: link ? `1px solid ${color}33` : `1px solid ${C.border}` }}
+      onMouseEnter={e => link && (e.currentTarget.style.transform = "translateY(-2px)")}
+      onMouseLeave={e => link && (e.currentTarget.style.transform = "translateY(0)")}>
+      <div style={{ width: 36, height: 36, borderRadius: 8, background: color + "18", border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px", fontFamily: font.mono, fontSize: 12, fontWeight: 700, color }}>
+        {abbr}
+      </div>
+      <div style={{ fontFamily: font.display, fontSize: 26, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, marginTop: 5 }}>{label}</div>
+      {link && <div style={{ fontFamily: font.body, fontSize: 10, color, marginTop: 4 }}>Tap to open →</div>}
     </div>
   );
 
@@ -1770,16 +1787,27 @@ function AnalyticsTab({ log, businessName }) {
         <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 4 }}>Your ReviewSend performance</div>
       </div>
 
-      {/* Stat cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
-        {statCard(total, "Total Sent", "All time")}
-        {statCard(thisMonth.length, "This Month", lastMonth.length > 0 ? `${growth > 0 ? "+" : ""}${growth}% vs last month` : "First month!", growth >= 0 ? C.green : "#e74c3c")}
-        {statCard(googleCount, "Google", `${googlePct}%`, "#4A90D9")}
-        {statCard(yelpCount, "Yelp", `${yelpPct}%`, "#C0392B")}
+      {/* Top row — 4 stat boxes */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+        {topCard(total, "Total Sent", "All time", C.gold)}
+        {topCard(thisMonth.length, "This Month", lastMonth.length > 0 ? `${growth >= 0 ? "+" : ""}${growth}% vs last` : "First month!", growth >= 0 ? C.green : "#e74c3c")}
+        {topCard(googleCount, "Google Sent", `${total > 0 ? Math.round((googleCount/total)*100) : 0}%`, "#4A90D9")}
+        {topCard(yelpCount, "Yelp Sent", `${total > 0 ? Math.round((yelpCount/total)*100) : 0}%`, "#C0392B")}
+      </div>
+
+      {/* Bottom row — 4 post tracking boxes */}
+      <div style={{ marginBottom: 16 }}>
+        <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 10, fontWeight: 700 }}>Posts Published</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          {postCard(gpCount, "Google Posts", "GP", "#4A90D9", socialLinks?.google || null)}
+          {postCard(gcCount, "Google Campaign", "GC", "#1A8C4E", socialLinks?.google_campaign || null)}
+          {postCard(igCount, "Instagram", "IG", "#E1306C", socialLinks?.instagram || null)}
+          {postCard(fbCount, "Facebook", "FB", "#1877F2", socialLinks?.facebook || null)}
+        </div>
       </div>
 
       {/* 7-day bar chart */}
-      <div style={{ ...card, padding: "20px 16px" }}>
+      <div style={{ ...card, padding: "20px 16px", marginBottom: 12 }}>
         <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 16, fontWeight: 700 }}>Last 7 Days</div>
         <div style={{ display: "flex", gap: 6, alignItems: "flex-end", height: 80 }}>
           {days.map((d, i) => (
@@ -1792,37 +1820,8 @@ function AnalyticsTab({ log, businessName }) {
         </div>
       </div>
 
-      {/* Platform breakdown */}
-      <div style={{ ...card, padding: "20px 16px", marginTop: 12 }}>
-        <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 16, fontWeight: 700 }}>Platform Breakdown</div>
-        <div style={{ marginBottom: 14 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ width: 22, height: 22, borderRadius: 6, background: "#4A90D9", color: "#fff", fontSize: 11, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>G</span>
-              <span style={{ fontFamily: font.body, fontSize: 14, color: C.text }}>Google</span>
-            </div>
-            <span style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{googleCount} ({googlePct}%)</span>
-          </div>
-          <div style={{ height: 8, background: C.border, borderRadius: 99, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${googlePct}%`, background: "linear-gradient(90deg, #4A90D9, #2D7DD2)", borderRadius: 99, transition: "width 0.5s" }} />
-          </div>
-        </div>
-        <div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ width: 22, height: 22, borderRadius: 6, background: "#C0392B", color: "#fff", fontSize: 11, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>Y</span>
-              <span style={{ fontFamily: font.body, fontSize: 14, color: C.text }}>Yelp</span>
-            </div>
-            <span style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{yelpCount} ({yelpPct}%)</span>
-          </div>
-          <div style={{ height: 8, background: C.border, borderRadius: 99, overflow: "hidden" }}>
-            <div style={{ height: "100%", width: `${yelpPct}%`, background: "linear-gradient(90deg, #C0392B, #962d22)", borderRadius: 99, transition: "width 0.5s" }} />
-          </div>
-        </div>
-      </div>
-
       {total === 0 && (
-        <div style={{ textAlign: "center", padding: "30px 0", fontFamily: font.body, fontSize: 15, color: C.textMuted }}>
+        <div style={{ textAlign: "center", padding: "20px 0", fontFamily: font.body, fontSize: 15, color: C.textMuted }}>
           No data yet. Start sending review requests to see your analytics!
         </div>
       )}
@@ -1878,6 +1877,7 @@ function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = fa
         file_name: file.name,
         caption: caption,
         status: "pending",
+        posted_platforms: [],
       }]);
       setCaption("");
       loadPhotos();
@@ -1885,11 +1885,13 @@ function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = fa
     setUploading(false);
   };
 
-  const updateStatus = async (id, status) => {
-    const updates = { status };
-    if (status === "downloaded") updates.downloaded_at = new Date().toISOString();
-    if (status === "posted") updates.posted_at = new Date().toISOString();
-    await supabase.from("photos").update(updates).eq("id", id);
+  const togglePlatform = async (photo, platform) => {
+    const current = photo.posted_platforms || [];
+    const updated = current.includes(platform)
+      ? current.filter(p => p !== platform)
+      : [...current, platform];
+    const newStatus = updated.length > 0 ? "posted" : (photo.status === "posted" ? "downloaded" : photo.status);
+    await supabase.from("photos").update({ posted_platforms: updated, status: newStatus, ...(updated.length > 0 ? { posted_at: new Date().toISOString() } : {}) }).eq("id", photo.id);
     loadPhotos();
     if (onStatusChange) onStatusChange();
   };
@@ -1903,30 +1905,48 @@ function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = fa
       a.download = photo.file_name;
       a.click();
       URL.revokeObjectURL(url);
-      if (photo.status === "pending") updateStatus(photo.id, "downloaded");
+      if (photo.status === "pending") {
+        await supabase.from("photos").update({ status: "downloaded", downloaded_at: new Date().toISOString() }).eq("id", photo.id);
+        loadPhotos();
+        if (onStatusChange) onStatusChange();
+      }
     }
   };
 
-  const statusBadge = (status) => {
-    const styles = {
-      pending: { bg: "#FFF7ED", color: "#C2410C", border: "#FED7AA" },
-      downloaded: { bg: "#EFF6FF", color: "#1D4ED8", border: "#BFDBFE" },
-      posted: { bg: "#F0FDF4", color: "#15803D", border: "#BBF7D0" },
-    };
-    const labels = { pending: "⬜ Pending", downloaded: "⬇️ Downloaded", posted: "✅ Posted to Google" };
-    const st = styles[status] || styles.pending;
+  const PLATFORMS = [
+    { id: "google", label: "GP", fullLabel: "Google", color: "#4A90D9" },
+    { id: "google_campaign", label: "GC", fullLabel: "G. Campaign", color: "#1A8C4E" },
+    { id: "instagram", label: "IG", fullLabel: "Instagram", color: "#E1306C" },
+    { id: "facebook", label: "FB", fullLabel: "Facebook", color: "#1877F2" },
+  ];
+
+  const statusBadge = (photo) => {
+    const platforms = photo.posted_platforms || [];
+    if (platforms.length === 0) {
+      if (photo.status === "downloaded") return (
+        <span style={{ fontFamily: font.body, fontSize: 12, padding: "4px 12px", borderRadius: 99, background: "#EFF6FF", color: "#1D4ED8", border: "1px solid #BFDBFE", fontWeight: 600 }}>⬇️ Downloaded</span>
+      );
+      return (
+        <span style={{ fontFamily: font.body, fontSize: 12, padding: "4px 12px", borderRadius: 99, background: "#FFF7ED", color: "#C2410C", border: "1px solid #FED7AA", fontWeight: 600 }}>⬜ Pending</span>
+      );
+    }
     return (
-      <span style={{ fontFamily: font.body, fontSize: 12, padding: "4px 12px", borderRadius: 99, background: st.bg, color: st.color, border: `1px solid ${st.border}`, fontWeight: 600 }}>
-        {labels[status] || "⬜ Pending"}
-      </span>
+      <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
+        {platforms.map(p => {
+          const pl = PLATFORMS.find(x => x.id === p);
+          return pl ? (
+            <span key={p} style={{ fontFamily: font.mono, fontSize: 11, padding: "3px 8px", borderRadius: 99, background: pl.color + "18", color: pl.color, border: `1px solid ${pl.color}44`, fontWeight: 700 }}>✅ {pl.label}</span>
+          ) : null;
+        })}
+      </div>
     );
   };
 
   return (
     <div className="fade-up">
-      <PageHeader 
-        title={isAdmin || isMarketing ? "Client Photos" : "Upload Photos"} 
-        sub={isAdmin || isMarketing ? `${photos.length} total photos` : "Upload photos for your Google Business listing"} 
+      <PageHeader
+        title={isAdmin || isMarketing ? "Client Photos" : "Upload Photos"}
+        sub={isAdmin || isMarketing ? `${photos.length} total photos` : "Upload photos for your Google Business listing"}
       />
 
       {!isAdmin && !isMarketing && (
@@ -1936,12 +1956,11 @@ function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = fa
             <input style={inputStyle} value={caption} onChange={e => setCaption(e.target.value)} placeholder="e.g. New menu item, team photo, storefront..." />
           </div>
           <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" style={{ display: "none" }} />
-          <button onClick={() => fileInputRef.current?.click()} disabled={uploading}
-            style={{ ...btnStyle, width: "100%" }}>
+          <button onClick={() => fileInputRef.current?.click()} disabled={uploading} style={{ ...btnStyle, width: "100%" }}>
             {uploading ? "Uploading…" : "📸 Upload Photo"}
           </button>
           <p style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, textAlign: "center", marginTop: 12 }}>
-            Photos will be reviewed and posted to your Google Business listing by your account manager.
+            Photos will be reviewed and posted to your listings by your account manager.
           </p>
         </div>
       )}
@@ -1949,25 +1968,45 @@ function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = fa
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {photos.map((photo, i) => (
           <div key={i} style={{ ...card, padding: "18px 20px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: 10, background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📸</div>
-                <div>
-                  <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{photo.file_name}</div>
-                  {(isAdmin || isMarketing) && photo.businesses && <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 2 }}>{photo.businesses.name}</div>}
-                  {photo.caption && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 2 }}>{photo.caption}</div>}
-                  <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textSub, marginTop: 4 }}>{timeAgo(photo.created_at)}</div>
-                </div>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                {statusBadge(photo.status)}
+            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+              <div style={{ width: 44, height: 44, borderRadius: 10, background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📸</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{photo.file_name}</div>
+                {(isAdmin || isMarketing) && photo.businesses && <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 2 }}>{photo.businesses.name}</div>}
+                {photo.caption && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 2 }}>{photo.caption}</div>}
+                <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textSub, marginTop: 4 }}>{timeAgo(photo.created_at)}</div>
+
+                {/* Status badges */}
+                <div style={{ marginTop: 8 }}>{statusBadge(photo)}</div>
+
+                {/* Platform posting buttons — admin/marketing only */}
                 {(isAdmin || isMarketing) && (
-                  <>
-                    <button onClick={() => downloadPhoto(photo)} style={{ ...ghostBtnStyle, padding: "8px 16px", fontSize: 13 }}>⬇️ Download</button>
-                    {photo.status !== "posted" && (
-                      <button onClick={() => updateStatus(photo.id, "posted")} style={{ ...btnStyle, padding: "8px 16px", fontSize: 13 }}>✅ Mark as Posted</button>
-                    )}
-                  </>
+                  <div style={{ marginTop: 12 }}>
+                    <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 2, color: C.textSub, textTransform: "uppercase", marginBottom: 8, fontWeight: 700 }}>Mark as Posted</div>
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
+                      {PLATFORMS.map(p => {
+                        const isPosted = (photo.posted_platforms || []).includes(p.id);
+                        return (
+                          <button key={p.id} onClick={() => togglePlatform(photo, p.id)}
+                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 99, border: `1.5px solid ${isPosted ? p.color : C.border}`, background: isPosted ? p.color + "18" : C.bg, color: isPosted ? p.color : C.textMuted, fontFamily: font.mono, fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all 0.15s" }}>
+                            {isPosted ? "✅" : "○"} {p.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <button onClick={() => downloadPhoto(photo)} style={{ ...ghostBtnStyle, padding: "7px 14px", fontSize: 12 }}>⬇️ Download</button>
+                  </div>
+                )}
+
+                {/* Business owner view — show where posted */}
+                {!isAdmin && !isMarketing && (photo.posted_platforms || []).length > 0 && (
+                  <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted }}>Posted to:</span>
+                    {(photo.posted_platforms || []).map(p => {
+                      const pl = PLATFORMS.find(x => x.id === p);
+                      return pl ? <span key={p} style={{ fontFamily: font.mono, fontSize: 11, color: pl.color, fontWeight: 700 }}>{pl.fullLabel}</span> : null;
+                    })}
+                  </div>
                 )}
               </div>
             </div>
