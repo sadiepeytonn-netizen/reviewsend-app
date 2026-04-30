@@ -986,7 +986,6 @@ function AccountManagerDashboard({ data, onSignOut }) {
             )}
           </div>
         )}
-        )}
 
         {/* CLIENTS LIST */}
         {!selectedBusiness && tab === "clients" && (
