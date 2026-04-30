@@ -567,6 +567,7 @@ function MarketingDashboard({ data, onSignOut }) {
                 businessName={selectedBusiness.name}
                 photos={selectedBizPhotos || []}
                 socialLinks={selectedBusiness.social_links || {}}
+                embedded={true}
               />
             )}
 
@@ -940,6 +941,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
                 businessName={selectedBusiness.name}
                 photos={selectedBizPhotos || []}
                 socialLinks={selectedBusiness.social_links || {}}
+                embedded={true}
               />
             )}
 
@@ -1728,7 +1730,7 @@ function BulkSendTab({ business, onComplete }) {
 }
 
 // ── ANALYTICS TAB ─────────────────────────────────────────────────────────────
-function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavigate = null }) {
+function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavigate = null, embedded = false }) {
   const now = new Date();
   const thisMonth = log.filter(m => new Date(m.sent_at).getMonth() === now.getMonth() && new Date(m.sent_at).getFullYear() === now.getFullYear());
   const lastMonth = log.filter(m => { const d = new Date(m.sent_at); const lm = new Date(now.getFullYear(), now.getMonth() - 1); return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear(); });
@@ -1780,7 +1782,7 @@ function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavi
   );
 
   return (
-    <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "20px 20px 20px" }}>
+    <div style={embedded ? { padding: "4px 0 20px" } : { position: "absolute", inset: 0, overflowY: "auto", padding: "20px 20px 20px" }}>
       <div style={{ textAlign: "center", marginBottom: 20 }}>
         <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Analytics</div>
         <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 4 }}>Your ReviewSend performance</div>
