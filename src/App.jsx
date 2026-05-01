@@ -236,11 +236,22 @@ function SuperAdminDashboard({ onSignOut }) {
   };
 
   const deleteCompany = async (id) => {
+    const confirmed = window.confirm("Are you sure you want to delete this marketing company? This cannot be undone.");
+    if (!confirmed) return;
     await supabase.from("marketing_companies").delete().eq("id", id);
     loadData();
   };
 
-  const deleteBusiness = async (id) => {
+  const deleteBusiness = async (id, name, email) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete " + (name || "this business") + "?
+
+This will permanently delete all their messages, photos, and history. This cannot be undone."
+    );
+    if (!confirmed) return;
+    await supabase.from("messages").delete().eq("business_id", id);
+    await supabase.from("photos").delete().eq("business_id", id);
+    await supabase.from("bulk_sends").delete().eq("business_id", id);
     await supabase.from("businesses").delete().eq("id", id);
     loadData();
   };
@@ -359,7 +370,7 @@ function SuperAdminDashboard({ onSignOut }) {
                       <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted, marginTop: 4 }}>{b.email}</div>
                       {b.marketing_companies && <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 4 }}>via {b.marketing_companies.name}</div>}
                     </div>
-                    <button onClick={() => deleteBusiness(b.id)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontFamily: font.body, fontSize: 13 }}>Remove</button>
+                    <button onClick={() => deleteBusiness(b.id, b.name, b.email)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontFamily: font.body, fontSize: 13 }}>🗑️ Delete</button>
                   </div>
                 </div>
               ))}
@@ -487,9 +498,35 @@ function MarketingDashboard({ data, onSignOut }) {
       loadData();
       alert("Client created! A login setup email has been sent to " + newBiz.email);
     } else {
-      alert("Error saving client: " + error.message);
+      if (error.message.includes("duplicate key") || error.message.includes("unique constraint")) {
+        alert("A client with that email address already exists.");
+      } else {
+        alert("Error saving client: " + error.message);
+      }
     }
     setSaving(false);
+  };
+
+  const [showDeleteModal, setShowDeleteModal] = React.useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = React.useState("");
+  const [businessToDelete, setBusinessToDelete] = React.useState(null);
+
+  const confirmDeleteClient = async () => {
+    if (!businessToDelete) return;
+    if (deleteConfirmText.trim().toLowerCase() !== businessToDelete.name.trim().toLowerCase()) {
+      alert("Business name does not match. Please type the name exactly as shown.");
+      return;
+    }
+    await supabase.from("messages").delete().eq("business_id", businessToDelete.id);
+    await supabase.from("photos").delete().eq("business_id", businessToDelete.id);
+    await supabase.from("bulk_sends").delete().eq("business_id", businessToDelete.id);
+    await supabase.from("businesses").delete().eq("id", businessToDelete.id);
+    setShowDeleteModal(false);
+    setDeleteConfirmText("");
+    setBusinessToDelete(null);
+    setSelectedBusiness(null);
+    setSelectedBizTab("analytics");
+    loadData();
   };
 
   const addAccountManager = async () => {
@@ -651,12 +688,61 @@ function MarketingDashboard({ data, onSignOut }) {
             )}
 
             {selectedBizTab === "settings" && (
-              <ClientSettingsTab business={selectedBusiness} onSave={async (links) => {
-                await supabase.from("businesses").update({ social_links: links }).eq("id", selectedBusiness.id);
-                setSelectedBusiness(b => ({ ...b, social_links: links }));
-                loadData();
-              }} />
+              <div>
+                <ClientSettingsTab business={selectedBusiness} onSave={async (links) => {
+                  await supabase.from("businesses").update({ social_links: links }).eq("id", selectedBusiness.id);
+                  setSelectedBusiness(b => ({ ...b, social_links: links }));
+                  loadData();
+                }} />
+                <div style={{ marginTop: 32, paddingTop: 24, borderTop: "1px solid #ffcccc" }}>
+                  <div style={{ fontFamily: "Playfair Display, serif", fontSize: 16, color: "#cc0000", marginBottom: 8 }}>Danger Zone</div>
+                  <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: 13, color: "rgba(13,17,23,0.55)", marginBottom: 16 }}>
+                    Permanently delete this client and all their data including messages, photos, and history. This cannot be undone.
+                  </p>
+                  <button onClick={() => { setBusinessToDelete(selectedBusiness); setDeleteConfirmText(""); setShowDeleteModal(true); }}
+                    style={{ padding: "10px 24px", background: "transparent", color: "#cc0000", border: "1.5px solid #cc0000", borderRadius: 8, fontFamily: "DM Sans, sans-serif", fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                    Delete Client
+                  </button>
+                </div>
+              </div>
             )}
+          </div>
+        )}
+
+        {/* DELETE CONFIRMATION MODAL - Marketing Company only */}
+        {showDeleteModal && businessToDelete && (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+            <div style={{ background: "#fff", borderRadius: 16, padding: 32, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+              <div style={{ fontFamily: "Playfair Display, serif", fontSize: 22, fontWeight: 700, color: "#cc0000", marginBottom: 8 }}>Delete Client</div>
+              <p style={{ fontFamily: "DM Sans, sans-serif", fontSize: 14, color: "rgba(13,17,23,0.6)", lineHeight: 1.6, marginBottom: 24 }}>
+                This will permanently delete <strong>{businessToDelete.name}</strong> and all their messages, photos, and history. This cannot be undone.
+              </p>
+              <div style={{ background: "#fff5f5", border: "1px solid #ffcccc", borderRadius: 8, padding: 16, marginBottom: 24 }}>
+                <div style={{ fontFamily: "DM Sans, sans-serif", fontSize: 12, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.5)", marginBottom: 8 }}>
+                  Type the business name to confirm:
+                </div>
+                <div style={{ fontFamily: "DM Sans, sans-serif", fontSize: 13, color: "#cc0000", fontWeight: 700, marginBottom: 10 }}>
+                  {businessToDelete.name}
+                </div>
+                <input
+                  value={deleteConfirmText}
+                  onChange={e => setDeleteConfirmText(e.target.value)}
+                  placeholder={businessToDelete.name}
+                  style={{ width: "100%", padding: "10px 14px", border: "1.5px solid #ffaaaa", borderRadius: 8, fontFamily: "DM Sans, sans-serif", fontSize: 14, outline: "none", boxSizing: "border-box" }}
+                />
+              </div>
+              <div style={{ display: "flex", gap: 12 }}>
+                <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); setBusinessToDelete(null); }}
+                  style={{ flex: 1, padding: "11px", background: "transparent", border: "1.5px solid #D6E2F0", borderRadius: 8, fontFamily: "DM Sans, sans-serif", fontSize: 14, fontWeight: 600, cursor: "pointer", color: "rgba(13,17,23,0.6)" }}>
+                  Cancel
+                </button>
+                <button onClick={confirmDeleteClient}
+                  disabled={deleteConfirmText.trim().toLowerCase() !== businessToDelete.name.trim().toLowerCase()}
+                  style={{ flex: 1, padding: "11px", background: deleteConfirmText.trim().toLowerCase() === businessToDelete.name.trim().toLowerCase() ? "#cc0000" : "#ffaaaa", border: "none", borderRadius: 8, fontFamily: "DM Sans, sans-serif", fontSize: 14, fontWeight: 600, cursor: deleteConfirmText.trim().toLowerCase() === businessToDelete.name.trim().toLowerCase() ? "pointer" : "not-allowed", color: "#fff", transition: "background 0.2s" }}>
+                  🗑️ Permanently Delete
+                </button>
+              </div>
+            </div>
           </div>
         )}
 
