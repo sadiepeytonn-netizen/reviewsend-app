@@ -209,7 +209,18 @@ function SuperAdminDashboard({ onSignOut }) {
       message_template: "Hi {name}! Thanks for visiting {business}. Leave us a review here: {link} 🙏",
       follow_up_template: "Hi {name}! Just a reminder — we'd love your review: {link} ⭐",
     }]);
-    if (!error) { setShowAddBusiness(false); setNewBusiness({ name: "", email: "", password: "", google_link: "", yelp_link: "", marketing_company_id: "" }); loadData(); }
+    if (!error) {
+      // Send password setup email so the business owner can create their login
+      await supabase.auth.resetPasswordForEmail(newBusiness.email, {
+        redirectTo: "https://reviewsend-app-lilac.vercel.app",
+      });
+      setShowAddBusiness(false);
+      setNewBusiness({ name: "", email: "", password: "", google_link: "", yelp_link: "", marketing_company_id: "" });
+      loadData();
+      alert("Client created! A password setup email has been sent to " + newBusiness.email);
+    } else {
+      alert("Error creating client: " + error.message);
+    }
     setSaving(false);
   };
 
@@ -443,7 +454,18 @@ function MarketingDashboard({ data, onSignOut }) {
       message_template: "Hi {name}! Thanks for visiting {business}. Leave us a review here: {link} 🙏",
       follow_up_template: "Hi {name}! Just a reminder — we'd love your review: {link} ⭐",
     }]);
-    if (!error) { setShowAdd(false); setNewBiz({ name: "", email: "", google_link: "", yelp_link: "" }); loadData(); }
+    if (!error) {
+      // Send password setup email so the business owner can create their login
+      await supabase.auth.resetPasswordForEmail(newBiz.email, {
+        redirectTo: "https://reviewsend-app-lilac.vercel.app",
+      });
+      setShowAdd(false);
+      setNewBiz({ name: "", email: "", google_link: "", yelp_link: "" });
+      loadData();
+      alert("Client created! A password setup email has been sent to " + newBiz.email);
+    } else {
+      alert("Error creating client: " + error.message);
+    }
     setSaving(false);
   };
 
