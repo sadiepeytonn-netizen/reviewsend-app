@@ -567,7 +567,6 @@ function MarketingDashboard({ data, onSignOut }) {
                 businessName={selectedBusiness.name}
                 photos={selectedBizPhotos || []}
                 socialLinks={selectedBusiness.social_links || {}}
-                embedded={true}
               />
             )}
 
@@ -941,7 +940,6 @@ function AccountManagerDashboard({ data, onSignOut }) {
                 businessName={selectedBusiness.name}
                 photos={selectedBizPhotos || []}
                 socialLinks={selectedBusiness.social_links || {}}
-                embedded={true}
               />
             )}
 
@@ -1442,7 +1440,7 @@ function ClientSettingsTab({ business, onSave }) {
 
   const fields = [
     { key: "google", label: "Google Business Profile", placeholder: "https://g.page/r/...", color: "#4A90D9", abbr: "GP" },
-    { key: "google_campaign", label: "Google Campaign Link", placeholder: "https://ads.google.com/...", color: "#1A8C4E", abbr: "GC" },
+    { key: "google_campaign", label: "Google Photos Link", placeholder: "https://business.google.com/...", color: "#1A8C4E", abbr: "GP2" },
     { key: "instagram", label: "Instagram Page", placeholder: "https://instagram.com/yourbusiness", color: "#E1306C", abbr: "IG" },
     { key: "facebook", label: "Facebook Page", placeholder: "https://facebook.com/yourbusiness", color: "#1877F2", abbr: "FB" },
   ];
@@ -1730,7 +1728,7 @@ function BulkSendTab({ business, onComplete }) {
 }
 
 // ── ANALYTICS TAB ─────────────────────────────────────────────────────────────
-function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavigate = null, embedded = false }) {
+function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavigate = null }) {
   const now = new Date();
   const thisMonth = log.filter(m => new Date(m.sent_at).getMonth() === now.getMonth() && new Date(m.sent_at).getFullYear() === now.getFullYear());
   const lastMonth = log.filter(m => { const d = new Date(m.sent_at); const lm = new Date(now.getFullYear(), now.getMonth() - 1); return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear(); });
@@ -1782,7 +1780,7 @@ function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavi
   );
 
   return (
-    <div style={embedded ? { padding: "4px 0 20px" } : { position: "absolute", inset: 0, overflowY: "auto", padding: "20px 20px 20px" }}>
+    <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "20px 20px 20px" }}>
       <div style={{ textAlign: "center", marginBottom: 20 }}>
         <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Analytics</div>
         <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 4 }}>Your ReviewSend performance</div>
@@ -1801,7 +1799,7 @@ function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavi
         <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 10, fontWeight: 700 }}>Posts Published</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {postCard(gpCount, "Google Posts", "GP", "#4A90D9", socialLinks?.google || null)}
-          {postCard(gcCount, "Google Campaign", "GC", "#1A8C4E", socialLinks?.google_campaign || null)}
+          {postCard(gcCount, "Google Photos", "GP2", "#1A8C4E", socialLinks?.google_campaign || null)}
           {postCard(igCount, "Instagram", "IG", "#E1306C", socialLinks?.instagram || null)}
           {postCard(fbCount, "Facebook", "FB", "#1877F2", socialLinks?.facebook || null)}
         </div>
@@ -1916,7 +1914,7 @@ function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = fa
 
   const PLATFORMS = [
     { id: "google", label: "GP", fullLabel: "Google", color: "#4A90D9" },
-    { id: "google_campaign", label: "GC", fullLabel: "G. Campaign", color: "#1A8C4E" },
+    { id: "google_campaign", label: "GP2", fullLabel: "Google Photos", color: "#1A8C4E" },
     { id: "instagram", label: "IG", fullLabel: "Instagram", color: "#E1306C" },
     { id: "facebook", label: "FB", fullLabel: "Facebook", color: "#1877F2" },
   ];
