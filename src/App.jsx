@@ -244,9 +244,7 @@ function SuperAdminDashboard({ onSignOut }) {
 
   const deleteBusiness = async (id, name, email) => {
     const confirmed = window.confirm(
-      "Are you sure you want to delete " + (name || "this business") + "?
-
-This will permanently delete all their messages, photos, and history. This cannot be undone."
+      "Are you sure you want to delete " + (name || "this business") + "?\n\nThis will permanently delete all their messages, photos, and history. This cannot be undone."
     );
     if (!confirmed) return;
     await supabase.from("messages").delete().eq("business_id", id);
