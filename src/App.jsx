@@ -505,9 +505,9 @@ function MarketingDashboard({ data, onSignOut }) {
     setSaving(false);
   };
 
-  const [showDeleteModal, setShowDeleteModal] = React.useState(false);
-  const [deleteConfirmText, setDeleteConfirmText] = React.useState("");
-  const [businessToDelete, setBusinessToDelete] = React.useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [businessToDelete, setBusinessToDelete] = useState(null);
 
   const confirmDeleteClient = async () => {
     if (!businessToDelete) return;
