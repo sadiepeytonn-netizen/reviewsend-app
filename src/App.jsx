@@ -2102,68 +2102,68 @@ function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = fa
           const isPartiallyPosted = postedPlatforms.length > 0 && !isFullyPosted;
 
           return (
-            <div key={i} style={{ background: "#fff", borderRadius: 16, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <div key={i} style={{ background: "#fff", borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
 
               {/* Card top strip — color coded by status */}
-              <div style={{ height: 3, background: isFullyPosted ? "#1A8C4E" : isPartiallyPosted ? "#F59E0B" : photo.status === "downloaded" ? "#3B82F6" : "#E5E7EB" }} />
+              <div style={{ height: 2, background: isFullyPosted ? "#1A8C4E" : isPartiallyPosted ? "#F59E0B" : photo.status === "downloaded" ? "#3B82F6" : "#E5E7EB" }} />
 
-              <div style={{ padding: "18px 20px" }}>
+              <div style={{ padding: "12px 16px" }}>
                 {/* Top row — icon, filename, time, status badge */}
-                <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
-                  <div style={{ width: 48, height: 48, borderRadius: 12, background: "#F4F7FB", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📷</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <div style={{ width: 36, height: 36, borderRadius: 8, background: "#F4F7FB", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>📷</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{photo.file_name}</div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
+                    <div style={{ fontFamily: font.display, fontSize: 13, color: C.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{photo.file_name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
                       {(isAdmin || isMarketing) && photo.businesses && (
-                        <span style={{ fontFamily: font.body, fontSize: 12, color: C.gold, fontWeight: 600 }}>{photo.businesses.name}</span>
+                        <span style={{ fontFamily: font.body, fontSize: 11, color: C.gold, fontWeight: 600 }}>{photo.businesses.name}</span>
                       )}
                       {photo.caption && (
-                        <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>"{photo.caption}"</span>
+                        <span style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted }}>"{photo.caption}"</span>
                       )}
-                      <span style={{ fontFamily: font.mono, fontSize: 11, color: C.textSub }}>{timeAgo(photo.created_at)}</span>
+                      <span style={{ fontFamily: font.mono, fontSize: 10, color: C.textSub }}>{timeAgo(photo.created_at)}</span>
                     </div>
                   </div>
                   {/* Status badge */}
                   <div style={{ flexShrink: 0 }}>
                     {isFullyPosted ? (
-                      <span style={{ fontFamily: font.body, fontSize: 11, padding: "4px 12px", borderRadius: 99, background: "#DCFCE7", color: "#166534", border: "1px solid #BBF7D0", fontWeight: 600, whiteSpace: "nowrap" }}>All Posted</span>
+                      <span style={{ fontFamily: font.body, fontSize: 10, padding: "3px 10px", borderRadius: 99, background: "#DCFCE7", color: "#166534", border: "1px solid #BBF7D0", fontWeight: 600, whiteSpace: "nowrap" }}>All Posted</span>
                     ) : isPartiallyPosted ? (
-                      <span style={{ fontFamily: font.body, fontSize: 11, padding: "4px 12px", borderRadius: 99, background: "#FEF9C3", color: "#854D0E", border: "1px solid #FDE68A", fontWeight: 600, whiteSpace: "nowrap" }}>In Progress</span>
+                      <span style={{ fontFamily: font.body, fontSize: 10, padding: "3px 10px", borderRadius: 99, background: "#FEF9C3", color: "#854D0E", border: "1px solid #FDE68A", fontWeight: 600, whiteSpace: "nowrap" }}>In Progress</span>
                     ) : photo.status === "downloaded" ? (
-                      <span style={{ fontFamily: font.body, fontSize: 11, padding: "4px 12px", borderRadius: 99, background: "#DBEAFE", color: "#1E40AF", border: "1px solid #BFDBFE", fontWeight: 600, whiteSpace: "nowrap" }}>Downloaded</span>
+                      <span style={{ fontFamily: font.body, fontSize: 10, padding: "3px 10px", borderRadius: 99, background: "#DBEAFE", color: "#1E40AF", border: "1px solid #BFDBFE", fontWeight: 600, whiteSpace: "nowrap" }}>Downloaded</span>
                     ) : (
-                      <span style={{ fontFamily: font.body, fontSize: 11, padding: "4px 12px", borderRadius: 99, background: "#FFF7ED", color: "#9A3412", border: "1px solid #FED7AA", fontWeight: 600, whiteSpace: "nowrap" }}>Pending</span>
+                      <span style={{ fontFamily: font.body, fontSize: 10, padding: "3px 10px", borderRadius: 99, background: "#FFF7ED", color: "#9A3412", border: "1px solid #FED7AA", fontWeight: 600, whiteSpace: "nowrap" }}>Pending</span>
                     )}
                   </div>
                 </div>
 
                 {/* Platform posting — admin/marketing only */}
                 {(isAdmin || isMarketing) && (
-                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                        <span style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginRight: 4 }}>Posted to</span>
+                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                        <span style={{ fontFamily: font.body, fontSize: 10, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginRight: 2 }}>Posted to</span>
                         {PLATFORMS.map(p => {
                           const isPosted = postedPlatforms.includes(p.id);
                           return (
                             <button key={p.id} onClick={() => togglePlatform(photo, p.id)}
                               style={{
-                                display: "flex", alignItems: "center", gap: 5,
-                                padding: "5px 12px", borderRadius: 99,
+                                display: "flex", alignItems: "center", gap: 4,
+                                padding: "4px 10px", borderRadius: 99,
                                 border: `1.5px solid ${isPosted ? p.color : C.border}`,
                                 background: isPosted ? p.color + "15" : "transparent",
                                 color: isPosted ? p.color : C.textMuted,
-                                fontFamily: font.body, fontSize: 12, fontWeight: 600,
+                                fontFamily: font.body, fontSize: 11, fontWeight: 600,
                                 cursor: "pointer", transition: "all 0.15s",
                               }}>
-                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: isPosted ? p.color : C.border, display: "inline-block", flexShrink: 0 }} />
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: isPosted ? p.color : C.border, display: "inline-block", flexShrink: 0 }} />
                               {p.label}
                             </button>
                           );
                         })}
                       </div>
                       <button onClick={() => downloadPhoto(photo)}
-                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.textMuted, fontFamily: font.body, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                        style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 6, border: `1px solid ${C.border}`, background: "transparent", color: C.textMuted, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
                         ⬇ Download
                       </button>
                     </div>
@@ -2172,12 +2172,12 @@ function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = fa
 
                 {/* Business owner — show where posted */}
                 {!isAdmin && !isMarketing && postedPlatforms.length > 0 && (
-                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, fontWeight: 600 }}>Posted to:</span>
+                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 2, display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
+                    <span style={{ fontFamily: font.body, fontSize: 10, color: C.textMuted, fontWeight: 600 }}>Posted to:</span>
                     {postedPlatforms.map(p => {
                       const pl = PLATFORMS.find(x => x.id === p);
                       return pl ? (
-                        <span key={p} style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: pl.color + "15", color: pl.color, border: `1px solid ${pl.color}33`, fontWeight: 600 }}>{pl.fullLabel}</span>
+                        <span key={p} style={{ fontFamily: font.body, fontSize: 10, padding: "2px 8px", borderRadius: 99, background: pl.color + "15", color: pl.color, border: `1px solid ${pl.color}33`, fontWeight: 600 }}>{pl.fullLabel}</span>
                       ) : null;
                     })}
                   </div>
