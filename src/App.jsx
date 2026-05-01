@@ -2095,53 +2095,97 @@ function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = fa
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {photos.map((photo, i) => (
-          <div key={i} style={{ ...card, padding: "18px 20px" }}>
-            <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 10, background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>📸</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{photo.file_name}</div>
-                {(isAdmin || isMarketing) && photo.businesses && <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 2 }}>{photo.businesses.name}</div>}
-                {photo.caption && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 2 }}>{photo.caption}</div>}
-                <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textSub, marginTop: 4 }}>{timeAgo(photo.created_at)}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {photos.map((photo, i) => {
+          const postedPlatforms = photo.posted_platforms || [];
+          const isFullyPosted = postedPlatforms.length === PLATFORMS.length;
+          const isPartiallyPosted = postedPlatforms.length > 0 && !isFullyPosted;
 
-                {/* Status badges */}
-                <div style={{ marginTop: 8 }}>{statusBadge(photo)}</div>
+          return (
+            <div key={i} style={{ background: "#fff", borderRadius: 16, border: `1px solid ${C.border}`, overflow: "hidden" }}>
 
-                {/* Platform posting buttons — admin/marketing only */}
-                {(isAdmin || isMarketing) && (
-                  <div style={{ marginTop: 12 }}>
-                    <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 2, color: C.textSub, textTransform: "uppercase", marginBottom: 8, fontWeight: 700 }}>Mark as Posted</div>
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
-                      {PLATFORMS.map(p => {
-                        const isPosted = (photo.posted_platforms || []).includes(p.id);
-                        return (
-                          <button key={p.id} onClick={() => togglePlatform(photo, p.id)}
-                            style={{ display: "flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 99, border: `1.5px solid ${isPosted ? p.color : C.border}`, background: isPosted ? p.color + "18" : C.bg, color: isPosted ? p.color : C.textMuted, fontFamily: font.mono, fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "all 0.15s" }}>
-                            {isPosted ? "✅" : "○"} {p.label}
-                          </button>
-                        );
-                      })}
+              {/* Card top strip — color coded by status */}
+              <div style={{ height: 3, background: isFullyPosted ? "#1A8C4E" : isPartiallyPosted ? "#F59E0B" : photo.status === "downloaded" ? "#3B82F6" : "#E5E7EB" }} />
+
+              <div style={{ padding: "18px 20px" }}>
+                {/* Top row — icon, filename, time, status badge */}
+                <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
+                  <div style={{ width: 48, height: 48, borderRadius: 12, background: "#F4F7FB", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, flexShrink: 0 }}>📷</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{photo.file_name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginTop: 3, flexWrap: "wrap" }}>
+                      {(isAdmin || isMarketing) && photo.businesses && (
+                        <span style={{ fontFamily: font.body, fontSize: 12, color: C.gold, fontWeight: 600 }}>{photo.businesses.name}</span>
+                      )}
+                      {photo.caption && (
+                        <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>"{photo.caption}"</span>
+                      )}
+                      <span style={{ fontFamily: font.mono, fontSize: 11, color: C.textSub }}>{timeAgo(photo.created_at)}</span>
                     </div>
-                    <button onClick={() => downloadPhoto(photo)} style={{ ...ghostBtnStyle, padding: "7px 14px", fontSize: 12 }}>⬇️ Download</button>
+                  </div>
+                  {/* Status badge */}
+                  <div style={{ flexShrink: 0 }}>
+                    {isFullyPosted ? (
+                      <span style={{ fontFamily: font.body, fontSize: 11, padding: "4px 12px", borderRadius: 99, background: "#DCFCE7", color: "#166534", border: "1px solid #BBF7D0", fontWeight: 600, whiteSpace: "nowrap" }}>All Posted</span>
+                    ) : isPartiallyPosted ? (
+                      <span style={{ fontFamily: font.body, fontSize: 11, padding: "4px 12px", borderRadius: 99, background: "#FEF9C3", color: "#854D0E", border: "1px solid #FDE68A", fontWeight: 600, whiteSpace: "nowrap" }}>In Progress</span>
+                    ) : photo.status === "downloaded" ? (
+                      <span style={{ fontFamily: font.body, fontSize: 11, padding: "4px 12px", borderRadius: 99, background: "#DBEAFE", color: "#1E40AF", border: "1px solid #BFDBFE", fontWeight: 600, whiteSpace: "nowrap" }}>Downloaded</span>
+                    ) : (
+                      <span style={{ fontFamily: font.body, fontSize: 11, padding: "4px 12px", borderRadius: 99, background: "#FFF7ED", color: "#9A3412", border: "1px solid #FED7AA", fontWeight: 600, whiteSpace: "nowrap" }}>Pending</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Platform posting — admin/marketing only */}
+                {(isAdmin || isMarketing) && (
+                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <span style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginRight: 4 }}>Posted to</span>
+                        {PLATFORMS.map(p => {
+                          const isPosted = postedPlatforms.includes(p.id);
+                          return (
+                            <button key={p.id} onClick={() => togglePlatform(photo, p.id)}
+                              style={{
+                                display: "flex", alignItems: "center", gap: 5,
+                                padding: "5px 12px", borderRadius: 99,
+                                border: `1.5px solid ${isPosted ? p.color : C.border}`,
+                                background: isPosted ? p.color + "15" : "transparent",
+                                color: isPosted ? p.color : C.textMuted,
+                                fontFamily: font.body, fontSize: 12, fontWeight: 600,
+                                cursor: "pointer", transition: "all 0.15s",
+                              }}>
+                              <span style={{ width: 7, height: 7, borderRadius: "50%", background: isPosted ? p.color : C.border, display: "inline-block", flexShrink: 0 }} />
+                              {p.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button onClick={() => downloadPhoto(photo)}
+                        style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.textMuted, fontFamily: font.body, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                        ⬇ Download
+                      </button>
+                    </div>
                   </div>
                 )}
 
-                {/* Business owner view — show where posted */}
-                {!isAdmin && !isMarketing && (photo.posted_platforms || []).length > 0 && (
-                  <div style={{ marginTop: 10, display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted }}>Posted to:</span>
-                    {(photo.posted_platforms || []).map(p => {
+                {/* Business owner — show where posted */}
+                {!isAdmin && !isMarketing && postedPlatforms.length > 0 && (
+                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 12, marginTop: 2, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                    <span style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, fontWeight: 600 }}>Posted to:</span>
+                    {postedPlatforms.map(p => {
                       const pl = PLATFORMS.find(x => x.id === p);
-                      return pl ? <span key={p} style={{ fontFamily: font.mono, fontSize: 11, color: pl.color, fontWeight: 700 }}>{pl.fullLabel}</span> : null;
+                      return pl ? (
+                        <span key={p} style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: pl.color + "15", color: pl.color, border: `1px solid ${pl.color}33`, fontWeight: 600 }}>{pl.fullLabel}</span>
+                      ) : null;
                     })}
                   </div>
                 )}
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         {photos.length === 0 && (
           <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>
             {isAdmin || isMarketing ? "No photos from clients yet." : "No photos uploaded yet. Upload your first photo above!"}
