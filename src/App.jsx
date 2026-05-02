@@ -2054,15 +2054,15 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
     setActivePlatform(platformId);
     const biz = business || {};
     const context = [
-      biz.name ? \`Business: \${biz.name}\` : \`Business: \${businessName}\`,
-      biz.city && biz.state ? \`Location: \${biz.city}, \${biz.state}\` : "",
-      biz.business_type ? \`Type: \${biz.business_type}\` : "",
-      biz.short_description ? \`Description: \${biz.short_description}\` : "",
-      photo.caption ? \`Photo note from staff: \${photo.caption}\` : "",
+      biz.name ? `Business: ${biz.name}` : `Business: ${businessName}`,
+      biz.city && biz.state ? `Location: ${biz.city}, ${biz.state}` : "",
+      biz.business_type ? `Type: ${biz.business_type}` : "",
+      biz.short_description ? `Description: ${biz.short_description}` : "",
+      photo.caption ? `Photo note from staff: ${photo.caption}` : "",
     ].filter(Boolean).join("\n");
 
     const platformLabel = PLATFORMS.find(p => p.id === platformId)?.fullLabel || platformId;
-    const prompt = \`\${PLATFORM_PROMPTS[platformId] || "Write a professional social media caption."}\n\nBusiness info:\n\${context}\n\nPlatform: \${platformLabel}\`;
+    const prompt = `${PLATFORM_PROMPTS[platformId] || "Write a professional social media caption."}\n\nBusiness info:\n${context}\n\nPlatform: ${platformLabel}`;
 
     try {
       const response = await fetch("https://api.anthropic.com/v1/messages", {
