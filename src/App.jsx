@@ -2065,11 +2065,17 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
     const prompt = `${PLATFORM_PROMPTS[platformId] || "Write a professional social media caption."}\n\nBusiness info:\n${context}\n\nPlatform: ${platformLabel}`;
 
     try {
+      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
+      if (!apiKey) {
+        setGeneratedCaption("API key not found. Make sure VITE_ANTHROPIC_API_KEY is set in Vercel environment variables and redeploy.");
+        setGenerating(false);
+        return;
+      }
       const response = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+          "x-api-key": apiKey,
           "anthropic-version": "2023-06-01",
           "anthropic-dangerous-direct-browser-access": "true",
         },
@@ -2080,10 +2086,15 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
         }),
       });
       const data = await response.json();
+      if (!response.ok) {
+        setGeneratedCaption("API error " + response.status + ": " + (data.error?.message || "Unknown error"));
+        setGenerating(false);
+        return;
+      }
       const text = data.content?.[0]?.text || "Could not generate caption. Please try again.";
       setGeneratedCaption(text);
     } catch (err) {
-      setGeneratedCaption("Error generating caption. Check your API key and try again.");
+      setGeneratedCaption("Network error: " + err.message);
     }
     setGenerating(false);
   };
