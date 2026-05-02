@@ -2288,7 +2288,7 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
                         {PLATFORMS.map(p => {
                           const isPosted = postedPlatforms.includes(p.id);
                           return (
-                            <button key={p.id} onClick={() => isPosted ? togglePlatform(photo, p.id) : openCaptionModal(photo, p.id)}
+                            <button key={p.id} onClick={() => isPosted ? togglePlatform(photo, p.id) : p.id === 'google_campaign' ? togglePlatform(photo, p.id) : openCaptionModal(photo, p.id)}
                               style={{
                                 display: "flex", alignItems: "center", gap: 4,
                                 padding: "4px 10px", borderRadius: 99,
