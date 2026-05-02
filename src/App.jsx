@@ -652,7 +652,7 @@ function MarketingDashboard({ data, onSignOut }) {
             )}
 
             {selectedBizTab === "photos" && (
-              <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} isMarketing={true} onStatusChange={loadData} />
+              <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadData} />
             )}
 
             {selectedBizTab === "history" && (
@@ -687,9 +687,9 @@ function MarketingDashboard({ data, onSignOut }) {
 
             {selectedBizTab === "settings" && (
               <div>
-                <ClientSettingsTab business={selectedBusiness} onSave={async (links) => {
-                  await supabase.from("businesses").update({ social_links: links }).eq("id", selectedBusiness.id);
-                  setSelectedBusiness(b => ({ ...b, social_links: links }));
+                <ClientSettingsTab business={selectedBusiness} onSave={async (links, bizInfo) => {
+                  await supabase.from("businesses").update({ social_links: links, ...bizInfo }).eq("id", selectedBusiness.id);
+                  setSelectedBusiness(b => ({ ...b, social_links: links, ...bizInfo }));
                   loadData();
                 }} />
                 <div style={{ marginTop: 32, paddingTop: 24, borderTop: "1px solid #ffcccc" }}>
@@ -1075,7 +1075,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
             )}
 
             {selectedBizTab === "photos" && (
-              <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} isMarketing={true} onStatusChange={loadData} />
+              <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadData} />
             )}
 
             {selectedBizTab === "history" && (
@@ -1109,9 +1109,9 @@ function AccountManagerDashboard({ data, onSignOut }) {
             )}
 
             {selectedBizTab === "settings" && (
-              <ClientSettingsTab business={selectedBusiness} onSave={async (links) => {
-                await supabase.from("businesses").update({ social_links: links }).eq("id", selectedBusiness.id);
-                setSelectedBusiness(b => ({ ...b, social_links: links }));
+              <ClientSettingsTab business={selectedBusiness} onSave={async (links, bizInfo) => {
+                await supabase.from("businesses").update({ social_links: links, ...bizInfo }).eq("id", selectedBusiness.id);
+                setSelectedBusiness(b => ({ ...b, social_links: links, ...bizInfo }));
                 loadData();
               }} />
             )}
@@ -1558,12 +1558,18 @@ function ClientSettingsTab({ business, onSave }) {
     instagram: business.social_links?.instagram || "",
     facebook: business.social_links?.facebook || "",
   });
+  const [bizInfo, setBizInfo] = useState({
+    city: business.city || "",
+    state: business.state || "",
+    business_type: business.business_type || "",
+    short_description: business.short_description || "",
+  });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
-    await onSave(links);
+    await onSave(links, bizInfo);
     setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
@@ -1576,8 +1582,15 @@ function ClientSettingsTab({ business, onSave }) {
     { key: "facebook", label: "Facebook Page", placeholder: "https://facebook.com/yourbusiness", color: "#1877F2", abbr: "FB" },
   ];
 
+  const businessTypes = [
+    "Restaurant / Food & Beverage", "Salon / Spa / Beauty", "Auto Shop / Dealership",
+    "Healthcare / Medical", "Retail", "Marketing Agency", "Fitness / Gym",
+    "Legal / Law Firm", "Real Estate", "Other"
+  ];
+
   return (
     <div>
+      {/* Social Links */}
       <div style={{ ...card, marginBottom: 16 }}>
         <div style={{ fontFamily: font.display, fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 8 }}>⚙️ Social Links</div>
         <p style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, lineHeight: 1.6, marginBottom: 20 }}>
@@ -1592,10 +1605,47 @@ function ClientSettingsTab({ business, onSave }) {
             <input style={inputStyle} value={links[f.key]} onChange={e => setLinks(l => ({ ...l, [f.key]: e.target.value }))} placeholder={f.placeholder} />
           </div>
         ))}
-        <button onClick={handleSave} disabled={saving} style={{ ...btnStyle, width: "100%" }}>
-          {saved ? "✅ Saved!" : saving ? "Saving…" : "Save Links"}
-        </button>
       </div>
+
+      {/* Business Info for AI Captions */}
+      <div style={{ ...card, marginBottom: 16 }}>
+        <div style={{ fontFamily: font.display, fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 4 }}>🤖 Business Info</div>
+        <p style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, lineHeight: 1.6, marginBottom: 20 }}>
+          Used to generate AI captions when photos are posted to social media or Google.
+        </p>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+          <div>
+            <Label>City</Label>
+            <input style={inputStyle} value={bizInfo.city} onChange={e => setBizInfo(b => ({ ...b, city: e.target.value }))} placeholder="e.g. Coral Springs" />
+          </div>
+          <div>
+            <Label>State</Label>
+            <input style={inputStyle} value={bizInfo.state} onChange={e => setBizInfo(b => ({ ...b, state: e.target.value }))} placeholder="e.g. Florida" />
+          </div>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <Label>Business Type</Label>
+          <select style={inputStyle} value={bizInfo.business_type} onChange={e => setBizInfo(b => ({ ...b, business_type: e.target.value }))}>
+            <option value="">Select one...</option>
+            {businessTypes.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <Label>Short Description</Label>
+          <textarea rows={3} style={{ ...inputStyle, resize: "none", lineHeight: 1.6 }}
+            value={bizInfo.short_description}
+            onChange={e => setBizInfo(b => ({ ...b, short_description: e.target.value }))}
+            placeholder="e.g. Family-owned Italian restaurant known for homemade pasta and wood-fired pizza." />
+          <div style={{ fontFamily: font.body, fontSize: 11, color: C.textSub, marginTop: 4 }}>One sentence describing what makes this business unique.</div>
+        </div>
+      </div>
+
+      <button onClick={handleSave} disabled={saving} style={{ ...btnStyle, width: "100%" }}>
+        {saved ? "✅ Saved!" : saving ? "Saving…" : "Save All Changes"}
+      </button>
     </div>
   );
 }
@@ -1978,11 +2028,92 @@ function timeAgo(dateStr) {
 }
 
 // ── PHOTOS TAB ────────────────────────────────────────────────────────────────
-function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = false, onStatusChange = null }) {
+function PhotosTab({ businessId, businessName, business = null, isAdmin = false, isMarketing = false, onStatusChange = null }) {
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [caption, setCaption] = useState("");
   const fileInputRef = useRef(null);
+
+  // Caption modal state
+  const [captionModal, setCaptionModal] = useState(null); // { photo, platform }
+  const [generatedCaption, setGeneratedCaption] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [captionCopied, setCaptionCopied] = useState(false);
+  const [activePlatform, setActivePlatform] = useState(null);
+
+  const PLATFORM_PROMPTS = {
+    google: "Write an SEO-optimized Google Business photo description. Use keywords naturally. No hashtags. 2-3 sentences max. Focus on location, business type, and what makes this business unique.",
+    google_campaign: "Write an SEO-optimized Google Photos caption. Use keywords naturally including the city and state. No hashtags. 2-3 sentences describing what is shown and the business.",
+    instagram: "Write an engaging Instagram caption. Conversational, warm tone. 2-3 sentences then a line break followed by 15 relevant hashtags including the city and business type.",
+    facebook: "Write a warm Facebook post caption. Community-focused tone, no hashtags. 2-3 sentences. End with a soft call to action like inviting people to visit.",
+  };
+
+  const generateCaption = async (photo, platformId) => {
+    setGenerating(true);
+    setGeneratedCaption("");
+    setActivePlatform(platformId);
+    const biz = business || {};
+    const context = [
+      biz.name ? \`Business: \${biz.name}\` : \`Business: \${businessName}\`,
+      biz.city && biz.state ? \`Location: \${biz.city}, \${biz.state}\` : "",
+      biz.business_type ? \`Type: \${biz.business_type}\` : "",
+      biz.short_description ? \`Description: \${biz.short_description}\` : "",
+      photo.caption ? \`Photo note from staff: \${photo.caption}\` : "",
+    ].filter(Boolean).join("\n");
+
+    const platformLabel = PLATFORMS.find(p => p.id === platformId)?.fullLabel || platformId;
+    const prompt = \`\${PLATFORM_PROMPTS[platformId] || "Write a professional social media caption."}\n\nBusiness info:\n\${context}\n\nPlatform: \${platformLabel}\`;
+
+    try {
+      const response = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": import.meta.env.VITE_ANTHROPIC_API_KEY,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 500,
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      const data = await response.json();
+      const text = data.content?.[0]?.text || "Could not generate caption. Please try again.";
+      setGeneratedCaption(text);
+    } catch (err) {
+      setGeneratedCaption("Error generating caption. Check your API key and try again.");
+    }
+    setGenerating(false);
+  };
+
+  const openCaptionModal = (photo, platformId) => {
+    setCaptionModal({ photo, platformId });
+    setActivePlatform(platformId);
+    setGeneratedCaption("");
+    setCaptionCopied(false);
+    generateCaption(photo, platformId);
+  };
+
+  const closeCaptionModal = () => {
+    setCaptionModal(null);
+    setGeneratedCaption("");
+    setActivePlatform(null);
+    setCaptionCopied(false);
+  };
+
+  const copyCaption = () => {
+    navigator.clipboard.writeText(generatedCaption);
+    setCaptionCopied(true);
+    setTimeout(() => setCaptionCopied(false), 2000);
+  };
+
+  const confirmPosted = async () => {
+    if (!captionModal) return;
+    await togglePlatform(captionModal.photo, captionModal.platformId);
+    closeCaptionModal();
+  };
 
   useEffect(() => { loadPhotos(); }, []);
 
@@ -2146,7 +2277,7 @@ function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = fa
                         {PLATFORMS.map(p => {
                           const isPosted = postedPlatforms.includes(p.id);
                           return (
-                            <button key={p.id} onClick={() => togglePlatform(photo, p.id)}
+                            <button key={p.id} onClick={() => isPosted ? togglePlatform(photo, p.id) : openCaptionModal(photo, p.id)}
                               style={{
                                 display: "flex", alignItems: "center", gap: 4,
                                 padding: "4px 10px", borderRadius: 99,
@@ -2192,6 +2323,78 @@ function PhotosTab({ businessId, businessName, isAdmin = false, isMarketing = fa
           </div>
         )}
       </div>
+
+      {/* AI CAPTION MODAL */}
+      {captionModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ background: "#fff", borderRadius: 20, padding: 0, maxWidth: 460, width: "100%", boxShadow: "0 24px 64px rgba(0,0,0,0.3)", overflow: "hidden" }}>
+
+            {/* Header */}
+            <div style={{ padding: "18px 20px 14px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div>
+                <div style={{ fontFamily: font.display, fontSize: 17, fontWeight: 700, color: C.text }}>
+                  Post to {PLATFORMS.find(p => p.id === activePlatform)?.fullLabel}
+                </div>
+                <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 2 }}>
+                  {businessName} · AI generated caption
+                </div>
+              </div>
+              <button onClick={closeCaptionModal} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: C.textMuted, lineHeight: 1 }}>×</button>
+            </div>
+
+            {/* Photo thumbnail */}
+            <div style={{ width: "100%", height: 140, background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6 }}>
+              <div style={{ fontSize: 36 }}>📷</div>
+              <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{captionModal.photo.file_name}</div>
+            </div>
+
+            {/* Platform tabs */}
+            <div style={{ padding: "12px 20px 0", display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {PLATFORMS.map(p => (
+                <button key={p.id} onClick={() => { setActivePlatform(p.id); generateCaption(captionModal.photo, p.id); }}
+                  style={{ padding: "4px 12px", borderRadius: 99, border: `1.5px solid ${activePlatform === p.id ? p.color : C.border}`, background: activePlatform === p.id ? p.color + "15" : "transparent", color: activePlatform === p.id ? p.color : C.textMuted, fontFamily: font.body, fontSize: 12, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
+                  {p.fullLabel}
+                </button>
+              ))}
+            </div>
+
+            {/* Caption box */}
+            <div style={{ padding: "14px 20px" }}>
+              <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase", color: C.textSub, marginBottom: 6 }}>Caption — tap to edit</div>
+              {generating ? (
+                <div style={{ background: "#F4F7FB", borderRadius: 10, padding: "20px", textAlign: "center", minHeight: 90 }}>
+                  <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, animation: "pulse 1.5s infinite" }}>✨ Generating caption...</div>
+                </div>
+              ) : (
+                <textarea
+                  value={generatedCaption}
+                  onChange={e => setGeneratedCaption(e.target.value)}
+                  rows={5}
+                  style={{ ...inputStyle, resize: "vertical", lineHeight: 1.6, fontSize: 13 }}
+                />
+              )}
+            </div>
+
+            {/* Actions */}
+            <div style={{ padding: "0 20px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={() => generateCaption(captionModal.photo, activePlatform)} disabled={generating}
+                  style={{ flex: 1, ...ghostBtnStyle, padding: "9px", fontSize: 13, fontWeight: 600 }}>
+                  🔄 Regenerate
+                </button>
+                <button onClick={copyCaption} disabled={generating || !generatedCaption}
+                  style={{ flex: 1, padding: "9px", borderRadius: 8, border: `1px solid ${C.blue}`, background: captionCopied ? "#DCFCE7" : "#EFF6FF", color: captionCopied ? "#166534" : C.blue, fontFamily: font.body, fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}>
+                  {captionCopied ? "✅ Copied!" : "📋 Copy Caption"}
+                </button>
+              </div>
+              <button onClick={confirmPosted} disabled={generating}
+                style={{ ...btnStyle, width: "100%", padding: "11px" }}>
+                ✓ Mark as Posted to {PLATFORMS.find(p => p.id === activePlatform)?.fullLabel}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
