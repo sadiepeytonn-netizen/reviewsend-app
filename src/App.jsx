@@ -225,10 +225,14 @@ function SuperAdminDashboard({ onSignOut }) {
       follow_up_template: "Hi {name}! Just a reminder — we'd love your review: {link} ⭐",
     }]);
     if (!error) {
+      const emailSent = await sendInviteEmail(newBusiness.email, newBusiness.name);
       setShowAddBusiness(false);
       setNewBusiness({ name: "", email: "", password: "", google_link: "", yelp_link: "", marketing_company_id: "" });
       loadData();
-      alert("Client created! A login setup email has been sent to " + newBusiness.email);
+      alert(emailSent
+        ? "Client created! A setup email has been sent to " + newBusiness.email
+        : "Client created! Note: invite email could not be sent — check Resend API key."
+      );
     } else {
       alert("Error saving client: " + error.message);
     }
@@ -420,6 +424,62 @@ function SuperAdminDashboard({ onSignOut }) {
 }
 
 // ── MARKETING COMPANY DASHBOARD ───────────────────────────────────────────────
+async function sendInviteEmail(email, businessName) {
+  const resendKey = import.meta.env.VITE_RESEND_API_KEY;
+  if (!resendKey) {
+    console.error("Resend API key not found");
+    return false;
+  }
+  try {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${resendKey}`,
+      },
+      body: JSON.stringify({
+        from: "ReviewSend <noreply@reviewsend.io>",
+        to: [email],
+        subject: "Welcome to ReviewSend — Set Up Your Account",
+        html: `
+          <div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px; background: #F4F7FB;">
+            <div style="background: #fff; border-radius: 16px; padding: 40px; border: 1px solid #D6E2F0;">
+              <div style="text-align: center; margin-bottom: 32px;">
+                <div style="font-size: 13px; font-weight: 600; letter-spacing: 5px; color: #1A5FBF; text-transform: uppercase;">★ ReviewSend</div>
+              </div>
+              <h1 style="font-size: 26px; font-weight: 700; color: #0D1117; margin: 0 0 12px;">Welcome to ReviewSend!</h1>
+              <p style="font-size: 15px; color: rgba(13,17,23,0.6); line-height: 1.7; margin: 0 0 24px;">
+                Your ReviewSend account for <strong>${businessName}</strong> has been created by your marketing partner.
+              </p>
+              <p style="font-size: 15px; color: rgba(13,17,23,0.6); line-height: 1.7; margin: 0 0 32px;">
+                Click the button below to set your password and access your dashboard.
+              </p>
+              <div style="text-align: center; margin-bottom: 32px;">
+                <a href="https://reviewsend-app-lilac.vercel.app" style="display: inline-block; background: #1A5FBF; color: #fff; padding: 14px 36px; border-radius: 8px; font-size: 15px; font-weight: 600; text-decoration: none;">
+                  Set Up My Account →
+                </a>
+              </div>
+              <p style="font-size: 13px; color: rgba(13,17,23,0.4); text-align: center; margin: 0;">
+                Questions? Contact your account manager or email us at support.reviewsend@gmail.com
+              </p>
+            </div>
+          </div>
+        `,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      console.error("Resend error:", data);
+      return false;
+    }
+    console.log("Email sent successfully:", data.id);
+    return true;
+  } catch (err) {
+    console.error("Email send error:", err);
+    return false;
+  }
+}
+
 function MarketingDashboard({ data, onSignOut }) {
   const [businesses, setBusinesses] = useState([]);
   const [messages, setMessages] = useState([]);
@@ -467,15 +527,12 @@ function MarketingDashboard({ data, onSignOut }) {
 
   const addBusiness = async () => {
     setSaving(true);
-    // Step 1: Create the Supabase auth account with a temp password
-    // This triggers a confirmation email so the user can set their own password
+    // Step 1: Create the Supabase auth account
     const tempPassword = "TempPass_" + Math.random().toString(36).slice(2, 10) + "!1";
     const { error: authError } = await supabase.auth.signUp({
       email: newBiz.email,
       password: tempPassword,
-      options: {
-        emailRedirectTo: "https://reviewsend-app-lilac.vercel.app",
-      },
+      options: { emailRedirectTo: "https://reviewsend-app-lilac.vercel.app" },
     });
     if (authError && authError.message !== "User already registered") {
       alert("Error creating account: " + authError.message);
@@ -491,10 +548,15 @@ function MarketingDashboard({ data, onSignOut }) {
       follow_up_template: "Hi {name}! Just a reminder — we'd love your review: {link} ⭐",
     }]);
     if (!error) {
+      // Step 3: Send invite email directly via Resend API
+      const emailSent = await sendInviteEmail(newBiz.email, newBiz.name);
       setShowAdd(false);
       setNewBiz({ name: "", email: "", google_link: "", yelp_link: "" });
       loadData();
-      alert("Client created! A login setup email has been sent to " + newBiz.email);
+      alert(emailSent
+        ? "Client created! A setup email has been sent to " + newBiz.email
+        : "Client created! Note: invite email could not be sent — check Resend API key."
+      );
     } else {
       if (error.message.includes("duplicate key") || error.message.includes("unique constraint")) {
         alert("A client with that email address already exists.");
