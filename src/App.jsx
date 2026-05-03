@@ -312,14 +312,13 @@ function SuperAdminDashboard({ onSignOut }) {
 
   const addBusiness = async () => {
     setSaving(true);
+    const cleanEmail = newBusiness.email.trim().toLowerCase();
     // Step 1: Create the Supabase auth account
     const tempPassword = "TempPass_" + Math.random().toString(36).slice(2, 10) + "!1";
     const { error: authError } = await supabase.auth.signUp({
-      email: newBusiness.email,
+      email: cleanEmail,
       password: tempPassword,
-      options: {
-        emailRedirectTo: "https://reviewsend-app-lilac.vercel.app",
-      },
+      options: { emailRedirectTo: "https://reviewsend-app-lilac.vercel.app" },
     });
     if (authError && authError.message !== "User already registered") {
       alert("Error creating account: " + authError.message);
@@ -328,21 +327,21 @@ function SuperAdminDashboard({ onSignOut }) {
     }
     // Step 2: Insert the business record
     const { error } = await supabase.from("businesses").insert([{
-      name: newBusiness.name, email: newBusiness.email,
+      name: newBusiness.name, email: cleanEmail,
       google_link: newBusiness.google_link, yelp_link: newBusiness.yelp_link,
       marketing_company_id: newBusiness.marketing_company_id || null,
       message_template: "Hi {name}! Thanks for visiting {business}. Leave us a review here: {link} 🙏",
       follow_up_template: "Hi {name}! Just a reminder — we'd love your review: {link} ⭐",
     }]);
     if (!error) {
-      const emailSent = await sendInviteEmail(newBusiness.email, newBusiness.name);
+      await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: "https://reviewsend-app-lilac.vercel.app",
+      });
+      await sendInviteEmail(cleanEmail, newBusiness.name);
       setShowAddBusiness(false);
       setNewBusiness({ name: "", email: "", password: "", google_link: "", yelp_link: "", marketing_company_id: "" });
       loadData();
-      alert(emailSent
-        ? "Client created! A setup email has been sent to " + newBusiness.email
-        : "Client created! Note: invite email could not be sent — check Resend API key."
-      );
+      alert("Client created! A password setup email has been sent to " + cleanEmail);
     } else {
       alert("Error saving client: " + error.message);
     }
@@ -603,8 +602,9 @@ function MarketingDashboard({ data, onSignOut }) {
     setSaving(true);
     // Step 1: Create the Supabase auth account
     const tempPassword = "TempPass_" + Math.random().toString(36).slice(2, 10) + "!1";
+    const cleanEmail = newBiz.email.trim().toLowerCase();
     const { error: authError } = await supabase.auth.signUp({
-      email: newBiz.email,
+      email: cleanEmail,
       password: tempPassword,
       options: { emailRedirectTo: "https://reviewsend-app-lilac.vercel.app" },
     });
@@ -615,7 +615,7 @@ function MarketingDashboard({ data, onSignOut }) {
     }
     // Step 2: Insert the business record
     const { error } = await supabase.from("businesses").insert([{
-      name: newBiz.name, email: newBiz.email,
+      name: newBiz.name, email: cleanEmail,
       google_link: newBiz.google_link, yelp_link: newBiz.yelp_link,
       marketing_company_id: data.id,
       message_template: "Hi {name}! Thanks for visiting {business}. Leave us a review here: {link} 🙏",
@@ -623,11 +623,11 @@ function MarketingDashboard({ data, onSignOut }) {
     }]);
     if (!error) {
       // Step 3: Send password reset email so they can set their own password
-      await supabase.auth.resetPasswordForEmail(newBiz.email, {
+      await supabase.auth.resetPasswordForEmail(cleanEmail, {
         redirectTo: "https://reviewsend-app-lilac.vercel.app",
       });
       // Step 4: Also send branded welcome email via Resend
-      await sendInviteEmail(newBiz.email, newBiz.name);
+      await sendInviteEmail(cleanEmail, newBiz.name);
       setShowAdd(false);
       setNewBiz({ name: "", email: "", google_link: "", yelp_link: "" });
       loadData();
