@@ -642,11 +642,10 @@ function MarketingDashboard({ data, onSignOut }) {
               {/* Feature toggles */}
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
                 <Label>Enabled Features</Label>
-                <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>Google Photos (GP2) is always free and cannot be locked.</p>
+                <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>The Photos tab and Google Photos (GP2) are always free. Google Posts, Instagram & Facebook can be locked separately.</p>
                 <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
                   {[
                     ["send", "✉️ Review Requests"],
-                    ["photos", "📸 Photos (GP, IG, FB)"],
                     ["google_posts", "📍 Google Posts"],
                     ["social", "📱 Instagram & Facebook"],
                     ["analytics", "📊 Analytics"],
@@ -1064,11 +1063,10 @@ function AccountManagerDashboard({ data, onSignOut }) {
               {/* Feature toggles */}
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
                 <Label>Enabled Features</Label>
-                <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>Google Photos (GP2) is always free and cannot be locked.</p>
+                <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>The Photos tab and Google Photos (GP2) are always free. Google Posts, Instagram & Facebook can be locked separately.</p>
                 <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
                   {[
                     ["send", "✉️ Review Requests"],
-                    ["photos", "📸 Photos (GP, IG, FB)"],
                     ["google_posts", "📍 Google Posts"],
                     ["social", "📱 Instagram & Facebook"],
                     ["analytics", "📊 Analytics"],
@@ -1423,14 +1421,14 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
     setEditingSettings(false);
   };
 
-  const features = settings.features || { send: true, photos: false, analytics: false, history: false, google_posts: false, social: false };
+  const features = settings.features || { send: true, analytics: false, history: false, google_posts: false, social: false };
 
   const navItems = isEmployee ? [
     { id: "send", icon: "✉", label: "Send", locked: !features.send },
-    { id: "photos", icon: "📸", label: "Photos", locked: !features.photos },
+    { id: "photos", icon: "📸", label: "Photos" },
   ] : [
     { id: "send", icon: "✉", label: "Send", locked: !features.send },
-    { id: "photos", icon: "📸", label: "Photos", locked: !features.photos },
+    { id: "photos", icon: "📸", label: "Photos" },
     { id: "log", icon: "📋", label: "History", locked: !features.history },
     { id: "analytics", icon: "📊", label: "Analytics", locked: !features.analytics },
     { id: "settings", icon: "⚙", label: "Settings" },
@@ -1492,7 +1490,6 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
             {(() => {
               const lockedList = [
                 !features.send && "Review Requests",
-                !features.photos && "Photos",
                 !features.analytics && "Analytics",
                 !features.history && "History",
                 !features.google_posts && "Google Posts",
@@ -1514,19 +1511,10 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
           </div>
         )}
 
-        {/* PHOTOS */}
+        {/* PHOTOS — always open for everyone, GP2 always works */}
         {tab === "photos" && (
-          <div style={{ position: "absolute", inset: 0, overflowY: features.photos ? "auto" : "hidden", padding: "20px 24px 20px" }}>
-            {features.photos ? (
-              <PhotosTab businessId={data.id} businessName={settings.name} features={features} />
-            ) : (
-              <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 24px" }}>
-                <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.4 }}>📸</div>
-                <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text, marginBottom: 8 }}>Photos Not Enabled</div>
-                <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, lineHeight: 1.6, marginBottom: 24 }}>Photo uploads are not included in your current plan. Contact your account manager to unlock this feature.</div>
-                <button style={{ ...btnStyle, width: "auto", padding: "12px 28px" }}>Contact Your Manager</button>
-              </div>
-            )}
+          <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "20px 24px 20px" }}>
+            <PhotosTab businessId={data.id} businessName={settings.name} features={features} />
           </div>
         )}
 
