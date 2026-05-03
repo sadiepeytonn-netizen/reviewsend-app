@@ -128,21 +128,46 @@ export default function App() {
     if (am) { setUserRole("accountmanager"); setAccountManagerData(am); setLoading(false); return; }
     const { data: biz } = await supabase.from("businesses").select("*").eq("email", email).single();
     if (biz) { setUserRole("business"); setBusinessData(biz); setLoading(false); return; }
-    // Check if employee
-    const { data: emp } = await supabase.from("employees").select("*, businesses(*)").eq("email", email).single();
-    if (emp) { setUserRole("employee"); setBusinessData(emp.businesses); setLoading(false); return; }
     setUserRole("unknown");
     setLoading(false);
   };
 
   const handleLogin = async () => {
     setAuthError(""); setAuthLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword });
+    const cleanEmail = authEmail.trim().toLowerCase();
+    
+    // First check if this is an employee login (employees use direct table auth)
+    const { data: emp } = await supabase.from("employees").select("*, businesses(*)").eq("email", cleanEmail).single();
+    if (emp) {
+      if (emp.password === authPassword) {
+        // Employee login successful — set role directly without Supabase Auth
+        setUserRole("employee");
+        setBusinessData(emp.businesses);
+        setSession({ user: { email: cleanEmail } });
+        setLoading(false);
+        setAuthLoading(false);
+        return;
+      } else {
+        setAuthError("Invalid login credentials.");
+        setAuthLoading(false);
+        return;
+      }
+    }
+
+    // Otherwise use normal Supabase Auth
+    const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: authPassword });
     if (error) setAuthError(error.message);
     setAuthLoading(false);
   };
 
   const handleSignOut = async () => {
+    // For employee logins (no Supabase Auth session), just clear state
+    if (userRole === "employee") {
+      setSession(null);
+      setUserRole(null);
+      setBusinessData(null);
+      return;
+    }
     await supabase.auth.signOut();
   };
 
@@ -1403,29 +1428,28 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
       alert("Please fill in all fields.");
       return;
     }
-    setEmployeeSaving(true);
-    const { error: authError } = await supabase.auth.signUp({
-      email: newEmployee.email,
-      password: newEmployee.password,
-      options: { emailRedirectTo: "https://reviewsend-app-lilac.vercel.app" },
-    });
-    if (authError && authError.message !== "User already registered") {
-      alert("Error creating employee login: " + authError.message);
-      setEmployeeSaving(false);
+    if (newEmployee.password.length < 6) {
+      alert("Password must be at least 6 characters.");
       return;
     }
+    setEmployeeSaving(true);
+    const cleanEmail = newEmployee.email.trim().toLowerCase();
+    // Store employee directly in employees table with their password
+    // Login is handled by checking employees table directly, no Supabase Auth needed
     const { error } = await supabase.from("employees").insert([{
       business_id: data.id,
       name: newEmployee.name,
-      email: newEmployee.email,
-      password: "set",
+      email: cleanEmail,
+      password: newEmployee.password,
     }]);
     if (!error) {
       const { data: emps } = await supabase.from("employees").select("*").eq("business_id", data.id);
       setEmployees(emps || []);
       setNewEmployee({ name: "", email: "", password: "" });
       setAddingEmployee(false);
-      alert("Employee added! They can now log in at reviewsend-app-lilac.vercel.app with the password you set.");
+      alert("Employee added! They can log in at reviewsend-app-lilac.vercel.app with:
+Email: " + cleanEmail + "
+Password: " + newEmployee.password);
     } else {
       if (error.message.includes("duplicate key") || error.message.includes("unique constraint")) {
         alert("An employee with that email already exists.");
