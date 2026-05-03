@@ -425,57 +425,21 @@ function SuperAdminDashboard({ onSignOut }) {
 
 // ── MARKETING COMPANY DASHBOARD ───────────────────────────────────────────────
 async function sendInviteEmail(email, businessName) {
-  const resendKey = import.meta.env.VITE_RESEND_API_KEY;
-  if (!resendKey) {
-    console.error("Resend API key not found");
-    return false;
-  }
   try {
-    const response = await fetch("https://api.resend.com/emails", {
+    const response = await fetch("https://reviewsend-server-production.up.railway.app/send-invite", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${resendKey}`,
-      },
-      body: JSON.stringify({
-        from: "ReviewSend <noreply@reviewsend.io>",
-        to: [email],
-        subject: "Welcome to ReviewSend — Set Up Your Account",
-        html: `
-          <div style="font-family: 'DM Sans', Arial, sans-serif; max-width: 520px; margin: 0 auto; padding: 40px 20px; background: #F4F7FB;">
-            <div style="background: #fff; border-radius: 16px; padding: 40px; border: 1px solid #D6E2F0;">
-              <div style="text-align: center; margin-bottom: 32px;">
-                <div style="font-size: 13px; font-weight: 600; letter-spacing: 5px; color: #1A5FBF; text-transform: uppercase;">★ ReviewSend</div>
-              </div>
-              <h1 style="font-size: 26px; font-weight: 700; color: #0D1117; margin: 0 0 12px;">Welcome to ReviewSend!</h1>
-              <p style="font-size: 15px; color: rgba(13,17,23,0.6); line-height: 1.7; margin: 0 0 24px;">
-                Your ReviewSend account for <strong>${businessName}</strong> has been created by your marketing partner.
-              </p>
-              <p style="font-size: 15px; color: rgba(13,17,23,0.6); line-height: 1.7; margin: 0 0 32px;">
-                Click the button below to set your password and access your dashboard.
-              </p>
-              <div style="text-align: center; margin-bottom: 32px;">
-                <a href="https://reviewsend-app-lilac.vercel.app" style="display: inline-block; background: #1A5FBF; color: #fff; padding: 14px 36px; border-radius: 8px; font-size: 15px; font-weight: 600; text-decoration: none;">
-                  Set Up My Account →
-                </a>
-              </div>
-              <p style="font-size: 13px; color: rgba(13,17,23,0.4); text-align: center; margin: 0;">
-                Questions? Contact your account manager or email us at support.reviewsend@gmail.com
-              </p>
-            </div>
-          </div>
-        `,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, businessName }),
     });
     const data = await response.json();
-    if (!response.ok) {
-      console.error("Resend error:", data);
+    if (!data.success) {
+      console.error("Invite email error:", data.error);
       return false;
     }
-    console.log("Email sent successfully:", data.id);
+    console.log("Invite email sent:", data.id);
     return true;
   } catch (err) {
-    console.error("Email send error:", err);
+    console.error("Invite email error:", err);
     return false;
   }
 }
