@@ -53,20 +53,67 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState(false);
 
   const [accountManagerData, setAccountManagerData] = useState(null);
+  const [setPasswordMode, setSetPasswordMode] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [setPasswordLoading, setSetPasswordLoading] = useState(false);
+  const [setPasswordError, setSetPasswordError] = useState("");
+  const [setPasswordSuccess, setSetPasswordSuccess] = useState(false);
 
   useEffect(() => {
+    // Check if this is a password recovery link click
+    const hash = window.location.hash;
+    if (hash && hash.includes("type=recovery")) {
+      setSetPasswordMode(true);
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
-      if (session) loadUserRole(session.user.email);
+      if (session && !hash.includes("type=recovery")) loadUserRole(session.user.email);
+      else if (!session) setLoading(false);
       else setLoading(false);
     });
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
-      if (session) loadUserRole(session.user.email);
-      else { setLoading(false); setUserRole(null); setBusinessData(null); setMarketingData(null); setAccountManagerData(null); }
+      if (_event === "PASSWORD_RECOVERY") {
+        setSetPasswordMode(true);
+        setLoading(false);
+        return;
+      }
+      if (session && !setPasswordMode) loadUserRole(session.user.email);
+      else if (!session) { setLoading(false); setUserRole(null); setBusinessData(null); setMarketingData(null); setAccountManagerData(null); }
     });
     return () => subscription.unsubscribe();
   }, []);
+
+  const handleSetPassword = async () => {
+    setSetPasswordError("");
+    if (!newPassword || newPassword.length < 6) {
+      setSetPasswordError("Password must be at least 6 characters.");
+      return;
+    }
+    if (newPassword !== newPasswordConfirm) {
+      setSetPasswordError("Passwords do not match.");
+      return;
+    }
+    setSetPasswordLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      setSetPasswordError(error.message);
+      setSetPasswordLoading(false);
+      return;
+    }
+    setSetPasswordSuccess(true);
+    setSetPasswordLoading(false);
+    // Clear the hash from URL
+    window.history.replaceState(null, "", window.location.pathname);
+    // After 2 seconds, reload so they log in fresh
+    setTimeout(() => {
+      setSetPasswordMode(false);
+      setSetPasswordSuccess(false);
+      supabase.auth.signOut();
+    }, 2500);
+  };
 
   const loadUserRole = async (email) => {
     setLoading(true);
@@ -106,6 +153,17 @@ export default function App() {
     </div>
   );
 
+  if (setPasswordMode) return (
+    <SetPasswordScreen
+      newPassword={newPassword} setNewPassword={setNewPassword}
+      newPasswordConfirm={newPasswordConfirm} setNewPasswordConfirm={setNewPasswordConfirm}
+      handleSetPassword={handleSetPassword}
+      loading={setPasswordLoading}
+      error={setPasswordError}
+      success={setPasswordSuccess}
+    />
+  );
+
   if (!session) return (
     <LoginScreen
       authMode={authMode} setAuthMode={setAuthMode}
@@ -129,6 +187,54 @@ export default function App() {
         <div style={{ fontFamily: font.display, fontSize: 20, color: C.text, marginBottom: 12 }}>Account not found</div>
         <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, marginBottom: 24 }}>Your email is not linked to any account. Please contact support.</div>
         <button onClick={handleSignOut} style={{ ...btnStyle }}>Sign Out</button>
+      </div>
+    </div>
+  );
+}
+
+// ── SET PASSWORD SCREEN ──────────────────────────────────────────────────────
+function SetPasswordScreen({ newPassword, setNewPassword, newPasswordConfirm, setNewPasswordConfirm, handleSetPassword, loading, error, success }) {
+  return (
+    <div style={{ minHeight: "100vh", background: "#F4F7FB", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <style>{globalCSS}</style>
+      <div className="fade-up" style={{ width: "100%", maxWidth: 420 }}>
+        <div style={{ textAlign: "center", marginBottom: 40 }}>
+          <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 13, letterSpacing: 5, color: "#1A5FBF", marginBottom: 10 }}>★ REVIEWSEND</div>
+          <h1 style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 30, fontWeight: 600, color: "#0D1117", letterSpacing: "-0.5px" }}>Set Your Password</h1>
+          <p style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", color: "#6B7A99", fontSize: 15, marginTop: 8, lineHeight: 1.6 }}>
+            Create a password for your ReviewSend account. You'll use this to log in going forward.
+          </p>
+        </div>
+        <div style={{ background: "#fff", border: "1px solid #D6E2F0", borderRadius: 16, padding: 36, boxShadow: "0 2px 16px rgba(26,95,191,0.06)" }}>
+          {success ? (
+            <div style={{ textAlign: "center", padding: "20px 0" }}>
+              <div style={{ fontSize: 48, marginBottom: 16 }}>✅</div>
+              <div style={{ fontFamily: "'Playfair Display', Georgia, serif", fontSize: 22, fontWeight: 600, color: "#0D1117", marginBottom: 8 }}>Password Set!</div>
+              <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 15, color: "#6B7A99" }}>Redirecting you to sign in…</div>
+            </div>
+          ) : (
+            <>
+              <div style={{ marginBottom: 18 }}>
+                <label style={{ display: "block", fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 11, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: "#6B7A99", marginBottom: 8 }}>New Password</label>
+                <input type="password" value={newPassword} placeholder="At least 6 characters"
+                  onChange={e => setNewPassword(e.target.value)}
+                  style={{ width: "100%", padding: "13px 16px", border: "1px solid #D6E2F0", borderRadius: 10, fontSize: 15, fontFamily: "'Cormorant Garamond', Georgia, serif", color: "#0D1117", outline: "none", background: "#fff" }} />
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: "block", fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 11, fontWeight: 600, letterSpacing: 2, textTransform: "uppercase", color: "#6B7A99", marginBottom: 8 }}>Confirm Password</label>
+                <input type="password" value={newPasswordConfirm} placeholder="Repeat your password"
+                  onChange={e => setNewPasswordConfirm(e.target.value)}
+                  onKeyDown={e => e.key === "Enter" && handleSetPassword()}
+                  style={{ width: "100%", padding: "13px 16px", border: "1px solid #D6E2F0", borderRadius: 10, fontSize: 15, fontFamily: "'Cormorant Garamond', Georgia, serif", color: "#0D1117", outline: "none", background: "#fff" }} />
+              </div>
+              {error && <p style={{ color: "#e74c3c", fontSize: 13, fontFamily: "'Cormorant Garamond', Georgia, serif", marginBottom: 16 }}>{error}</p>}
+              <button onClick={handleSetPassword} disabled={loading}
+                style={{ width: "100%", padding: "14px", background: "#1A5FBF", color: "#fff", border: "none", borderRadius: 10, fontSize: 16, fontWeight: 600, fontFamily: "'Cormorant Garamond', Georgia, serif", cursor: loading ? "not-allowed" : "pointer", opacity: loading ? 0.7 : 1 }}>
+                {loading ? "Setting password…" : "Set My Password →"}
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -516,15 +622,16 @@ function MarketingDashboard({ data, onSignOut }) {
       follow_up_template: "Hi {name}! Just a reminder — we'd love your review: {link} ⭐",
     }]);
     if (!error) {
-      // Step 3: Send invite email directly via Resend API
-      const emailSent = await sendInviteEmail(newBiz.email, newBiz.name);
+      // Step 3: Send password reset email so they can set their own password
+      await supabase.auth.resetPasswordForEmail(newBiz.email, {
+        redirectTo: "https://reviewsend-app-lilac.vercel.app",
+      });
+      // Step 4: Also send branded welcome email via Resend
+      await sendInviteEmail(newBiz.email, newBiz.name);
       setShowAdd(false);
       setNewBiz({ name: "", email: "", google_link: "", yelp_link: "" });
       loadData();
-      alert(emailSent
-        ? "Client created! A setup email has been sent to " + newBiz.email
-        : "Client created! Note: invite email could not be sent — check Resend API key."
-      );
+      alert("Client created! A password setup email has been sent to " + newBiz.email);
     } else {
       if (error.message.includes("duplicate key") || error.message.includes("unique constraint")) {
         alert("A client with that email address already exists.");
