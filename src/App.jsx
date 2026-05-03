@@ -81,6 +81,9 @@ export default function App() {
     if (am) { setUserRole("accountmanager"); setAccountManagerData(am); setLoading(false); return; }
     const { data: biz } = await supabase.from("businesses").select("*").eq("email", email).single();
     if (biz) { setUserRole("business"); setBusinessData(biz); setLoading(false); return; }
+    // Check if employee
+    const { data: emp } = await supabase.from("employees").select("*, businesses(*)").eq("email", email).single();
+    if (emp) { setUserRole("employee"); setBusinessData(emp.businesses); setLoading(false); return; }
     setUserRole("unknown");
     setLoading(false);
   };
@@ -116,7 +119,8 @@ export default function App() {
   if (userRole === "superadmin") return <SuperAdminDashboard onSignOut={handleSignOut} />;
   if (userRole === "marketing") return <MarketingDashboard data={marketingData} onSignOut={handleSignOut} />;
   if (userRole === "accountmanager") return <AccountManagerDashboard data={accountManagerData} onSignOut={handleSignOut} />;
-  if (userRole === "business") return <BusinessApp data={businessData} onSignOut={handleSignOut} />;
+  if (userRole === "business") return <BusinessApp data={businessData} onSignOut={handleSignOut} isEmployee={false} />;
+  if (userRole === "employee") return <BusinessApp data={businessData} onSignOut={handleSignOut} isEmployee={true} />;
 
   return (
     <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -638,12 +642,20 @@ function MarketingDashboard({ data, onSignOut }) {
               {/* Feature toggles */}
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
                 <Label>Enabled Features</Label>
+                <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>Google Photos (GP2) is always free and cannot be locked.</p>
                 <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-                  {[["photos","📸 Photos"],["analytics","📊 Analytics"]].map(([key, label]) => {
-                    const isOn = (selectedBusiness.features || {})[key] || false;
+                  {[
+                    ["send", "✉️ Review Requests"],
+                    ["photos", "📸 Photos (GP, IG, FB)"],
+                    ["google_posts", "📍 Google Posts"],
+                    ["social", "📱 Instagram & Facebook"],
+                    ["analytics", "📊 Analytics"],
+                    ["history", "📋 History"],
+                  ].map(([key, label]) => {
+                    const currentFeatures = selectedBusiness.features || {};
+                    const isOn = currentFeatures[key] || false;
                     return (
                       <button key={key} onClick={async () => {
-                        const currentFeatures = selectedBusiness.features || { reviews: true, photos: false, analytics: false };
                         const newFeatures = { ...currentFeatures, [key]: !isOn };
                         await supabase.from("businesses").update({ features: newFeatures }).eq("id", selectedBusiness.id);
                         setSelectedBusiness(b => ({ ...b, features: newFeatures }));
@@ -1052,12 +1064,20 @@ function AccountManagerDashboard({ data, onSignOut }) {
               {/* Feature toggles */}
               <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
                 <Label>Enabled Features</Label>
+                <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 4, marginBottom: 10 }}>Google Photos (GP2) is always free and cannot be locked.</p>
                 <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-                  {[["photos","📸 Photos"],["analytics","📊 Analytics"]].map(([key, label]) => {
-                    const isOn = (selectedBusiness.features || {})[key] || false;
+                  {[
+                    ["send", "✉️ Review Requests"],
+                    ["photos", "📸 Photos (GP, IG, FB)"],
+                    ["google_posts", "📍 Google Posts"],
+                    ["social", "📱 Instagram & Facebook"],
+                    ["analytics", "📊 Analytics"],
+                    ["history", "📋 History"],
+                  ].map(([key, label]) => {
+                    const currentFeatures = selectedBusiness.features || {};
+                    const isOn = currentFeatures[key] || false;
                     return (
                       <button key={key} onClick={async () => {
-                        const currentFeatures = selectedBusiness.features || { reviews: true, photos: false, analytics: false };
                         const newFeatures = { ...currentFeatures, [key]: !isOn };
                         await supabase.from("businesses").update({ features: newFeatures }).eq("id", selectedBusiness.id);
                         setSelectedBusiness(b => ({ ...b, features: newFeatures }));
@@ -1257,11 +1277,66 @@ function AccountManagerDashboard({ data, onSignOut }) {
   );
 }
 // ── BUSINESS APP ──────────────────────────────────────────────────────────────
-function BusinessApp({ data, onSignOut }) {
+function BusinessApp({ data, onSignOut, isEmployee = false }) {
   const [tab, setTab] = useState("send");
   const [settings, setSettings] = useState(data);
   const [editingSettings, setEditingSettings] = useState(false);
   const [draftSettings, setDraftSettings] = useState(data);
+  const [employees, setEmployees] = useState([]);
+  const [newEmployee, setNewEmployee] = useState({ name: "", email: "", password: "" });
+  const [addingEmployee, setAddingEmployee] = useState(false);
+  const [employeeSaving, setEmployeeSaving] = useState(false);
+
+  useEffect(() => {
+    supabase.from("employees").select("*").eq("business_id", data.id).then(({ data: emps }) => {
+      setEmployees(emps || []);
+    });
+  }, [data.id]);
+
+  const addEmployee = async () => {
+    if (!newEmployee.name || !newEmployee.email || !newEmployee.password) {
+      alert("Please fill in all fields.");
+      return;
+    }
+    setEmployeeSaving(true);
+    const { error: authError } = await supabase.auth.signUp({
+      email: newEmployee.email,
+      password: newEmployee.password,
+      options: { emailRedirectTo: "https://reviewsend-app-lilac.vercel.app" },
+    });
+    if (authError && authError.message !== "User already registered") {
+      alert("Error creating employee login: " + authError.message);
+      setEmployeeSaving(false);
+      return;
+    }
+    const { error } = await supabase.from("employees").insert([{
+      business_id: data.id,
+      name: newEmployee.name,
+      email: newEmployee.email,
+      password: "set",
+    }]);
+    if (!error) {
+      const { data: emps } = await supabase.from("employees").select("*").eq("business_id", data.id);
+      setEmployees(emps || []);
+      setNewEmployee({ name: "", email: "", password: "" });
+      setAddingEmployee(false);
+      alert("Employee added! They can now log in at reviewsend-app-lilac.vercel.app with the password you set.");
+    } else {
+      if (error.message.includes("duplicate key") || error.message.includes("unique constraint")) {
+        alert("An employee with that email already exists.");
+      } else {
+        alert("Error adding employee: " + error.message);
+      }
+    }
+    setEmployeeSaving(false);
+  };
+
+  const removeEmployee = async (emp) => {
+    const confirmed = window.confirm("Remove " + emp.name + " from your team? They will no longer be able to log in.");
+    if (!confirmed) return;
+    await supabase.from("employees").delete().eq("id", emp.id);
+    setEmployees(prev => prev.filter(e => e.id !== emp.id));
+  };
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
   const [platform, setPlatform] = useState("google");
@@ -1348,12 +1423,15 @@ function BusinessApp({ data, onSignOut }) {
     setEditingSettings(false);
   };
 
-  const features = settings.features || { reviews: true, photos: false, analytics: false };
+  const features = settings.features || { send: true, photos: false, analytics: false, history: false, google_posts: false, social: false };
 
-  const navItems = [
-    { id: "send", icon: "✉", label: "Send" },
+  const navItems = isEmployee ? [
+    { id: "send", icon: "✉", label: "Send", locked: !features.send },
     { id: "photos", icon: "📸", label: "Photos", locked: !features.photos },
-    { id: "log", icon: "📋", label: "History" },
+  ] : [
+    { id: "send", icon: "✉", label: "Send", locked: !features.send },
+    { id: "photos", icon: "📸", label: "Photos", locked: !features.photos },
+    { id: "log", icon: "📋", label: "History", locked: !features.history },
     { id: "analytics", icon: "📊", label: "Analytics", locked: !features.analytics },
     { id: "settings", icon: "⚙", label: "Settings" },
   ];
@@ -1373,7 +1451,14 @@ function BusinessApp({ data, onSignOut }) {
       <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
 
         {/* SEND */}
-        {tab === "send" && (
+        {tab === "send" && !features.send && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 24px" }}>
+            <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.4 }}>🔒</div>
+            <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text, marginBottom: 8 }}>Review Requests Locked</div>
+            <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, lineHeight: 1.6 }}>This feature is not enabled on your current plan. Contact your account manager to upgrade.</div>
+          </div>
+        )}
+        {tab === "send" && features.send && (
           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "center", padding: "20px 24px", gap: 16 }}>
             <div style={{ textAlign: "center", marginBottom: 4 }}>
               <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Send a Review Request</div>
@@ -1404,18 +1489,28 @@ function BusinessApp({ data, onSignOut }) {
             </div>
 
             {/* Locked features widget */}
-            {(!features.photos || !features.analytics) && (
-              <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 30, height: 30, borderRadius: "50%", background: C.surfaceHover, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>🔒</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: font.display, fontSize: 13, fontWeight: 600, color: C.text }}>Features Locked</div>
-                  <div style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, marginTop: 1 }}>
-                    {[!features.photos && "Photos", !features.analytics && "Analytics"].filter(Boolean).join(" & ")} not enabled on your plan
+            {(() => {
+              const lockedList = [
+                !features.send && "Review Requests",
+                !features.photos && "Photos",
+                !features.analytics && "Analytics",
+                !features.history && "History",
+                !features.google_posts && "Google Posts",
+                !features.social && "Instagram & Facebook",
+              ].filter(Boolean);
+              return lockedList.length > 0 ? (
+                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: "50%", background: C.surfaceHover, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>🔒</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: font.display, fontSize: 13, fontWeight: 600, color: C.text }}>Features Locked</div>
+                    <div style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, marginTop: 1 }}>
+                      {lockedList.join(", ")} not enabled on your plan
+                    </div>
                   </div>
+                  {!isEmployee && <div style={{ fontFamily: font.body, fontSize: 11, color: C.gold, fontWeight: 600, background: C.surfaceHover, border: `1px solid ${C.border}`, borderRadius: 99, padding: "5px 10px", whiteSpace: "nowrap", cursor: "pointer" }}>Contact Manager</div>}
                 </div>
-                <div style={{ fontFamily: font.body, fontSize: 11, color: C.gold, fontWeight: 600, background: C.surfaceHover, border: `1px solid ${C.border}`, borderRadius: 99, padding: "5px 10px", whiteSpace: "nowrap", cursor: "pointer" }}>Contact Manager</div>
-              </div>
-            )}
+              ) : null;
+            })()}
           </div>
         )}
 
@@ -1423,7 +1518,7 @@ function BusinessApp({ data, onSignOut }) {
         {tab === "photos" && (
           <div style={{ position: "absolute", inset: 0, overflowY: features.photos ? "auto" : "hidden", padding: "20px 24px 20px" }}>
             {features.photos ? (
-              <PhotosTab businessId={data.id} businessName={settings.name} />
+              <PhotosTab businessId={data.id} businessName={settings.name} features={features} />
             ) : (
               <div style={{ height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 24px" }}>
                 <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.4 }}>📸</div>
@@ -1436,7 +1531,14 @@ function BusinessApp({ data, onSignOut }) {
         )}
 
         {/* HISTORY */}
-        {tab === "log" && (
+        {tab === "log" && !features.history && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 24px" }}>
+            <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.4 }}>🔒</div>
+            <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text, marginBottom: 8 }}>History Locked</div>
+            <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, lineHeight: 1.6 }}>This feature is not enabled on your current plan. Contact your account manager to upgrade.</div>
+          </div>
+        )}
+        {tab === "log" && features.history && (
           <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "20px 24px" }}>
             <div style={{ textAlign: "center", marginBottom: 20 }}>
               <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Message History</div>
@@ -1533,6 +1635,65 @@ function BusinessApp({ data, onSignOut }) {
                   </button>
                 )}
               </div>
+              {/* Employee Management — only for business owners, not employees */}
+              {!isEmployee && (
+                <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ fontFamily: font.display, fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 4 }}>👥 Team</div>
+                  <p style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginBottom: 16, lineHeight: 1.6 }}>
+                    Add employees so they can send review requests and upload photos. They will not see analytics, history, or settings.
+                  </p>
+
+                  {/* Employee list */}
+                  {employees.length > 0 && (
+                    <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
+                      {employees.map(emp => (
+                        <div key={emp.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: C.surfaceHover, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                          <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+                            {emp.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontFamily: font.display, fontSize: 14, fontWeight: 600, color: C.text }}>{emp.name}</div>
+                            <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{emp.email}</div>
+                          </div>
+                          <button onClick={() => removeEmployee(emp)}
+                            style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "4px" }}>
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Add employee form */}
+                  {addingEmployee ? (
+                    <div style={{ background: C.surfaceHover, borderRadius: 12, padding: 16, border: `1px solid ${C.border}` }}>
+                      <div style={{ marginBottom: 12 }}>
+                        <Label>Employee Name</Label>
+                        <input style={inputStyle} placeholder="e.g. John Smith" value={newEmployee.name} onChange={e => setNewEmployee(n => ({ ...n, name: e.target.value }))} />
+                      </div>
+                      <div style={{ marginBottom: 12 }}>
+                        <Label>Email Address</Label>
+                        <input style={inputStyle} placeholder="employee@email.com" value={newEmployee.email} onChange={e => setNewEmployee(n => ({ ...n, email: e.target.value }))} />
+                      </div>
+                      <div style={{ marginBottom: 16 }}>
+                        <Label>Password</Label>
+                        <input type="password" style={inputStyle} placeholder="Create a password for them" value={newEmployee.password} onChange={e => setNewEmployee(n => ({ ...n, password: e.target.value }))} />
+                        <div style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, marginTop: 4 }}>Share this password with your employee directly. No email will be sent.</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <button onClick={addEmployee} disabled={employeeSaving} style={{ ...btnStyle, flex: 1 }}>
+                          {employeeSaving ? "Adding…" : "Add Employee"}
+                        </button>
+                        <button onClick={() => { setAddingEmployee(false); setNewEmployee({ name: "", email: "", password: "" }); }} style={{ ...ghostBtnStyle, flex: 1 }}>Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setAddingEmployee(true)} style={{ ...ghostBtnStyle, width: "100%", textAlign: "center" }}>
+                      + Add Employee
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -2054,7 +2215,7 @@ function timeAgo(dateStr) {
 }
 
 // ── PHOTOS TAB ────────────────────────────────────────────────────────────────
-function PhotosTab({ businessId, businessName, business = null, isAdmin = false, isMarketing = false, onStatusChange = null }) {
+function PhotosTab({ businessId, businessName, business = null, isAdmin = false, isMarketing = false, onStatusChange = null, features = null }) {
   const [photos, setPhotos] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [caption, setCaption] = useState("");
@@ -2313,8 +2474,30 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
                         <span style={{ fontFamily: font.body, fontSize: 10, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginRight: 2 }}>Posted to</span>
                         {PLATFORMS.map(p => {
                           const isPosted = postedPlatforms.includes(p.id);
+                          // Check if platform is locked based on features
+                          const isLocked = features && (
+                            (p.id === "google" && features.google_posts === false) ||
+                            ((p.id === "instagram" || p.id === "facebook") && features.social === false)
+                          );
+                          // GP2 (google_campaign) is always unlocked
+                          if (isLocked) {
+                            return (
+                              <button key={p.id} disabled
+                                style={{
+                                  display: "flex", alignItems: "center", gap: 4,
+                                  padding: "4px 10px", borderRadius: 99,
+                                  border: `1.5px solid ${C.border}`,
+                                  background: "transparent",
+                                  color: C.textSub,
+                                  fontFamily: font.body, fontSize: 11, fontWeight: 600,
+                                  cursor: "not-allowed", opacity: 0.5,
+                                }}>
+                                🔒 {p.label}
+                              </button>
+                            );
+                          }
                           return (
-                            <button key={p.id} onClick={() => isPosted ? togglePlatform(photo, p.id) : p.id === 'google_campaign' ? togglePlatform(photo, p.id) : openCaptionModal(photo, p.id)}
+                            <button key={p.id} onClick={() => isPosted ? togglePlatform(photo, p.id) : p.id === "google_campaign" ? togglePlatform(photo, p.id) : openCaptionModal(photo, p.id)}
                               style={{
                                 display: "flex", alignItems: "center", gap: 4,
                                 padding: "4px 10px", borderRadius: 99,
