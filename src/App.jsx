@@ -1447,9 +1447,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
       setEmployees(emps || []);
       setNewEmployee({ name: "", email: "", password: "" });
       setAddingEmployee(false);
-      alert("Employee added! They can log in at reviewsend-app-lilac.vercel.app with:
-Email: " + cleanEmail + "
-Password: " + newEmployee.password);
+      alert("Employee added! Email: " + cleanEmail + "  |  Password: " + newEmployee.password);
     } else {
       if (error.message.includes("duplicate key") || error.message.includes("unique constraint")) {
         alert("An employee with that email already exists.");
