@@ -338,18 +338,8 @@ function SuperAdminDashboard({ onSignOut }) {
   const addBusiness = async () => {
     setSaving(true);
     const cleanEmail = newBusiness.email.trim().toLowerCase();
-    // Step 1: Create the Supabase auth account
-    const tempPassword = "TempPass_" + Math.random().toString(36).slice(2, 10) + "!1";
-    const { error: authError } = await supabase.auth.signUp({
-      email: cleanEmail,
-      password: tempPassword,
-      options: { emailRedirectTo: "https://reviewsend-app-lilac.vercel.app" },
-    });
-    if (authError && authError.message !== "User already registered") {
-      alert("Error creating account: " + authError.message);
-      setSaving(false);
-      return;
-    }
+    // Step 1: Create auth account via server (no auto sign-in)
+    await createAuthUser(cleanEmail);
     // Step 2: Insert the business record
     const { error } = await supabase.from("businesses").insert([{
       name: newBusiness.name, email: cleanEmail,
@@ -558,6 +548,21 @@ function SuperAdminDashboard({ onSignOut }) {
 }
 
 // ── MARKETING COMPANY DASHBOARD ───────────────────────────────────────────────
+async function createAuthUser(email) {
+  try {
+    const response = await fetch("https://reviewsend-server-production.up.railway.app/create-user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const data = await response.json();
+    return data.success;
+  } catch (err) {
+    console.error("createAuthUser error:", err);
+    return false;
+  }
+}
+
 async function sendInviteEmail(email, businessName) {
   try {
     const response = await fetch("https://reviewsend-server-production.up.railway.app/send-invite", {
@@ -625,19 +630,9 @@ function MarketingDashboard({ data, onSignOut }) {
 
   const addBusiness = async () => {
     setSaving(true);
-    // Step 1: Create the Supabase auth account
-    const tempPassword = "TempPass_" + Math.random().toString(36).slice(2, 10) + "!1";
+    // Step 1: Create auth account via server (no auto sign-in)
     const cleanEmail = newBiz.email.trim().toLowerCase();
-    const { error: authError } = await supabase.auth.signUp({
-      email: cleanEmail,
-      password: tempPassword,
-      options: { emailRedirectTo: "https://reviewsend-app-lilac.vercel.app" },
-    });
-    if (authError && authError.message !== "User already registered") {
-      alert("Error creating account: " + authError.message);
-      setSaving(false);
-      return;
-    }
+    await createAuthUser(cleanEmail);
     // Step 2: Insert the business record
     const { error } = await supabase.from("businesses").insert([{
       name: newBiz.name, email: cleanEmail,
