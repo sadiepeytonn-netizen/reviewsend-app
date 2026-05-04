@@ -350,7 +350,7 @@ function SuperAdminDashboard({ onSignOut }) {
     }]);
     if (!error) {
       await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: "https://reviewsend-app-lilac.vercel.app",
+        redirectTo: "https://app.reviewsend.io",
       });
       await sendInviteEmail(cleanEmail, newBusiness.name);
       setShowAddBusiness(false);
@@ -671,7 +671,7 @@ function MarketingDashboard({ data, onSignOut }) {
     if (!error) {
       // Step 3: Send password reset email so they can set their own password
       await supabase.auth.resetPasswordForEmail(cleanEmail, {
-        redirectTo: "https://reviewsend-app-lilac.vercel.app",
+        redirectTo: "https://app.reviewsend.io",
       });
       // Step 4: Also send branded welcome email via Resend
       await sendInviteEmail(cleanEmail, newBiz.name);
