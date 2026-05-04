@@ -378,7 +378,10 @@ function SuperAdminDashboard({ onSignOut }) {
     await supabase.from("messages").delete().eq("business_id", id);
     await supabase.from("photos").delete().eq("business_id", id);
     await supabase.from("bulk_sends").delete().eq("business_id", id);
+    await supabase.from("employees").delete().eq("business_id", id);
     await supabase.from("businesses").delete().eq("id", id);
+    // Delete Supabase Auth account
+    if (email) await deleteAuthUser(email);
     loadData();
   };
 
@@ -548,6 +551,21 @@ function SuperAdminDashboard({ onSignOut }) {
 }
 
 // ── MARKETING COMPANY DASHBOARD ───────────────────────────────────────────────
+async function deleteAuthUser(email) {
+  try {
+    const response = await fetch("https://reviewsend-server-production.up.railway.app/delete-user", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const data = await response.json();
+    return data.success;
+  } catch (err) {
+    console.error("deleteAuthUser error:", err);
+    return false;
+  }
+}
+
 async function createAuthUser(email) {
   try {
     const response = await fetch("https://reviewsend-server-production.up.railway.app/create-user", {
@@ -672,10 +690,14 @@ function MarketingDashboard({ data, onSignOut }) {
       alert("Business name does not match. Please type the name exactly as shown.");
       return;
     }
+    // Delete all related data
     await supabase.from("messages").delete().eq("business_id", businessToDelete.id);
     await supabase.from("photos").delete().eq("business_id", businessToDelete.id);
     await supabase.from("bulk_sends").delete().eq("business_id", businessToDelete.id);
+    await supabase.from("employees").delete().eq("business_id", businessToDelete.id);
     await supabase.from("businesses").delete().eq("id", businessToDelete.id);
+    // Delete Supabase Auth account
+    if (businessToDelete.email) await deleteAuthUser(businessToDelete.email);
     setShowDeleteModal(false);
     setDeleteConfirmText("");
     setBusinessToDelete(null);
