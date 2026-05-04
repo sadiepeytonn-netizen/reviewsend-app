@@ -1818,9 +1818,13 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
         {/* ── SEND TAB ── */}
         {tab === "send" && !features.send && (
           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 32px" }}>
-            <div style={{ fontSize: 52, marginBottom: 16, opacity: 0.3 }}>🔒</div>
-            <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: "#0D1117", marginBottom: 10 }}>Review Requests Locked</div>
-            <div style={{ fontFamily: font.body, fontSize: 15, color: "rgba(13,17,23,0.5)", lineHeight: 1.7 }}>This feature is not enabled on your current plan. Contact your account manager to upgrade.</div>
+            <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #FFF7ED, #FED7AA)", border: "2px solid #FED7AA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, marginBottom: 20 }}>🔒</div>
+            <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: "#0D1117", marginBottom: 10 }}>Review Requests</div>
+            <div style={{ fontFamily: font.body, fontSize: 14, color: "rgba(13,17,23,0.5)", lineHeight: 1.7, marginBottom: 28 }}>Send personalized SMS review requests to your customers with a direct link to your Google or Yelp page. Contact your account manager to unlock this feature.</div>
+            <button onClick={() => setChatOpen(true)} style={{ background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", borderRadius: 14, padding: "14px 28px", border: "none", display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="white"/></svg>
+              <span style={{ fontFamily: font.body, fontSize: 14, fontWeight: 700, color: "#fff" }}>Message Your Account Manager</span>
+            </button>
           </div>
         )}
 
@@ -1905,9 +1909,13 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
         {/* ── HISTORY TAB ── */}
         {tab === "log" && !features.history && (
           <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 32px" }}>
-            <div style={{ fontSize: 52, marginBottom: 16, opacity: 0.3 }}>🔒</div>
-            <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: "#0D1117", marginBottom: 10 }}>History Locked</div>
-            <div style={{ fontFamily: font.body, fontSize: 15, color: "rgba(13,17,23,0.5)", lineHeight: 1.7 }}>This feature is not enabled on your current plan.</div>
+            <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #FFF7ED, #FED7AA)", border: "2px solid #FED7AA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, marginBottom: 20 }}>🔒</div>
+            <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: "#0D1117", marginBottom: 10 }}>Message History</div>
+            <div style={{ fontFamily: font.body, fontSize: 14, color: "rgba(13,17,23,0.5)", lineHeight: 1.7, marginBottom: 28 }}>See every review request you have ever sent — customer name, phone number, platform, and date. Contact your account manager to unlock this feature.</div>
+            <button onClick={() => setChatOpen(true)} style={{ background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", borderRadius: 14, padding: "14px 28px", border: "none", display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="white"/></svg>
+              <span style={{ fontFamily: font.body, fontSize: 14, fontWeight: 700, color: "#fff" }}>Message Your Account Manager</span>
+            </button>
           </div>
         )}
 
@@ -1949,9 +1957,13 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
             </div>
           ) : (
             <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 32px" }}>
-              <div style={{ fontSize: 52, marginBottom: 16, opacity: 0.3 }}>🔒</div>
-              <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: "#0D1117", marginBottom: 10 }}>Analytics Locked</div>
-              <div style={{ fontFamily: font.body, fontSize: 15, color: "rgba(13,17,23,0.5)", lineHeight: 1.7 }}>Contact your account manager to unlock analytics.</div>
+              <div style={{ width: 72, height: 72, borderRadius: "50%", background: "linear-gradient(135deg, #FFF7ED, #FED7AA)", border: "2px solid #FED7AA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 32, marginBottom: 20 }}>🔒</div>
+              <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: "#0D1117", marginBottom: 10 }}>Analytics</div>
+              <div style={{ fontFamily: font.body, fontSize: 14, color: "rgba(13,17,23,0.5)", lineHeight: 1.7, marginBottom: 28 }}>Track your review count, star rating, texts sent, and month-over-month growth — all in one place. Contact your account manager to unlock this feature.</div>
+              <button onClick={() => setChatOpen(true)} style={{ background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", borderRadius: 14, padding: "14px 28px", border: "none", display: "inline-flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="white"/></svg>
+                <span style={{ fontFamily: font.body, fontSize: 14, fontWeight: 700, color: "#fff" }}>Message Your Account Manager</span>
+              </button>
             </div>
           )
         )}
@@ -2156,8 +2168,8 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
       {/* Bottom Nav */}
       <div style={{ background: "#fff", borderTop: "1px solid rgba(26,95,191,0.08)", display: "flex", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -4px 20px rgba(0,0,0,0.06)" }}>
         {navItems.map(item => (
-          <button key={item.id} onClick={() => { if (!item.locked) { setTab(item.id); if (item.id === "photos") loadPendingPhotos(); } }}
-            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 0 8px", background: "none", border: "none", cursor: item.locked ? "not-allowed" : "pointer", gap: 3, position: "relative", opacity: item.locked ? 0.35 : 1, transition: "opacity 0.15s" }}>
+          <button key={item.id} onClick={() => { setTab(item.id); if (item.id === "photos" && !item.locked) loadPendingPhotos(); }}
+            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 0 8px", background: "none", border: "none", cursor: "pointer", gap: 3, position: "relative", opacity: item.locked ? 0.5 : 1, transition: "opacity 0.15s" }}>
             {item.locked && <span style={{ position: "absolute", top: 4, right: "20%", fontSize: 8 }}>🔒</span>}
             <div style={{ position: "relative", display: "inline-block" }}>
               <span style={{ fontSize: 22, lineHeight: 1 }}>{item.icon}</span>
