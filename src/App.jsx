@@ -640,6 +640,15 @@ function MarketingDashboard({ data, onSignOut }) {
           photos.forEach(p => { counts[p.business_id] = (counts[p.business_id] || 0) + 1; });
           setPendingPhotosByBiz(counts);
         }
+        // Load unread chat counts
+        const { data: unread } = await supabase.from("chat_messages")
+          .select("business_id").in("business_id", ids)
+          .eq("sender_role", "owner").eq("read", false);
+        if (unread) {
+          const chatCounts = {};
+          unread.forEach(m => { chatCounts[m.business_id] = (chatCounts[m.business_id] || 0) + 1; });
+          setUnreadChatByBiz(chatCounts);
+        }
       }
     }
     const { data: ams } = await supabase.from("account_managers").select("*").eq("marketing_company_id", data.id);
@@ -683,6 +692,44 @@ function MarketingDashboard({ data, onSignOut }) {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [businessToDelete, setBusinessToDelete] = useState(null);
+  const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
+  const [managerChatMessages, setManagerChatMessages] = useState([]);
+  const [managerChatInput, setManagerChatInput] = useState("");
+  const [managerChatSending, setManagerChatSending] = useState(false);
+
+  const loadUnreadCounts = async (bizList) => {
+    if (!bizList || bizList.length === 0) return;
+    const { data: unread } = await supabase.from("chat_messages")
+      .select("business_id")
+      .in("business_id", bizList.map(b => b.id))
+      .eq("sender_role", "owner")
+      .eq("read", false);
+    if (unread) {
+      const counts = {};
+      unread.forEach(m => { counts[m.business_id] = (counts[m.business_id] || 0) + 1; });
+      setUnreadChatByBiz(counts);
+    }
+  };
+
+  const loadManagerChat = async (bizId) => {
+    const { data: msgs } = await supabase.from("chat_messages")
+      .select("*").eq("business_id", bizId).order("created_at", { ascending: true });
+    if (msgs) setManagerChatMessages(msgs);
+    // Mark owner messages as read
+    await supabase.from("chat_messages").update({ read: true })
+      .eq("business_id", bizId).eq("sender_role", "owner").eq("read", false);
+    setUnreadChatByBiz(prev => ({ ...prev, [bizId]: 0 }));
+  };
+
+  const sendManagerMessage = async (bizId) => {
+    if (!managerChatInput.trim()) return;
+    setManagerChatSending(true);
+    const msg = { business_id: bizId, sender_role: "manager", sender_name: "Account Manager", message: managerChatInput.trim(), read: false };
+    const { data: inserted } = await supabase.from("chat_messages").insert([msg]).select().single();
+    if (inserted) setManagerChatMessages(prev => [...prev, inserted]);
+    setManagerChatInput("");
+    setManagerChatSending(false);
+  };
 
   const confirmDeleteClient = async () => {
     if (!businessToDelete) return;
@@ -819,13 +866,85 @@ function MarketingDashboard({ data, onSignOut }) {
             </div>
 
             <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}`, flexWrap: "wrap" }}>
-              {[["analytics","📊 Analytics"],["photos","📸 Photos"],["bulk","📤 Bulk Send"],["history","📋 History"],["settings","⚙️ Settings"]].map(([id, label]) => (
-                <button key={id} onClick={() => setSelectedBizTab(id)}
-                  style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selectedBizTab === id ? C.gold : "none", color: selectedBizTab === id ? "#fff" : C.textMuted, fontFamily: font.body, fontSize: 13, fontWeight: selectedBizTab === id ? 600 : 400, cursor: "pointer", minWidth: 80 }}>
-                  {label}
-                </button>
-              ))}
+              {[["messages","💬 Messages"],["analytics","📊 Analytics"],["photos","📸 Photos"],["bulk","📤 Bulk Send"],["history","📋 History"],["settings","⚙️ Settings"]].map(([id, label]) => {
+                const chatCount = id === "messages" ? (unreadChatByBiz[selectedBusiness?.id] || 0) : 0;
+                return (
+                  <button key={id} onClick={() => { setSelectedBizTab(id); if (id === "messages") loadManagerChat(selectedBusiness.id); }}
+                    style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selectedBizTab === id ? C.gold : "none", color: selectedBizTab === id ? "#fff" : C.textMuted, fontFamily: font.body, fontSize: 13, fontWeight: selectedBizTab === id ? 600 : 400, cursor: "pointer", minWidth: 80, position: "relative" }}>
+                    {label}
+                    {chatCount > 0 && (
+                      <span style={{ marginLeft: 6, background: "#E85D04", color: "#fff", borderRadius: 99, padding: "1px 6px", fontSize: 10, fontWeight: "bold", fontFamily: font.mono }}>
+                        {chatCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
+
+            {selectedBizTab === "messages" && (
+              <div style={{ padding: "4px 0 16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 300, maxHeight: 480, overflowY: "auto", marginBottom: 16 }}>
+                  {managerChatMessages.filter(m => m.business_id === selectedBusiness.id).length === 0 && (
+                    <div style={{ textAlign: "center", padding: "40px 20px", color: C.textMuted, fontFamily: font.body, fontSize: 14 }}>No messages yet. Send a message to start the conversation.</div>
+                  )}
+                  {managerChatMessages.filter(m => m.business_id === selectedBusiness.id).map((msg, i) => {
+                    const isManager = msg.sender_role === "manager";
+                    return (
+                      <div key={i} style={{ display: "flex", justifyContent: isManager ? "flex-end" : "flex-start" }}>
+                        <div style={{ maxWidth: "70%", padding: "10px 14px", borderRadius: isManager ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isManager ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : "#F0F4FA", color: isManager ? "#fff" : C.text, fontFamily: font.body, fontSize: 14, lineHeight: 1.5 }}>
+                          {!isManager && <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, marginBottom: 4 }}>{msg.sender_name || selectedBusiness.name}</div>}
+                          {msg.message}
+                          <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, textAlign: isManager ? "right" : "left" }}>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <input value={managerChatInput} onChange={e => setManagerChatInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendManagerMessage(selectedBusiness.id)}
+                    placeholder={"Message " + selectedBusiness.name + "..."}
+                    style={{ flex: 1, padding: "11px 16px", border: `1px solid ${C.border}`, borderRadius: 22, fontFamily: font.body, fontSize: 14, outline: "none", background: C.bg, color: C.text }} />
+                  <button onClick={() => sendManagerMessage(selectedBusiness.id)} disabled={managerChatSending || !managerChatInput.trim()}
+                    style={{ padding: "0 20px", borderRadius: 22, background: managerChatInput.trim() ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : C.border, border: "none", cursor: managerChatInput.trim() ? "pointer" : "default", color: "#fff", fontFamily: font.body, fontSize: 14, fontWeight: 600 }}>
+                    Send
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {selectedBizTab === "messages" && (
+              <div style={{ padding: "4px 0 16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 300, maxHeight: 480, overflowY: "auto", marginBottom: 16 }}>
+                  {managerChatMessages.filter(m => m.business_id === selectedBusiness.id).length === 0 && (
+                    <div style={{ textAlign: "center", padding: "40px 20px", color: C.textMuted, fontFamily: font.body, fontSize: 14 }}>No messages yet. Send a message to start the conversation.</div>
+                  )}
+                  {managerChatMessages.filter(m => m.business_id === selectedBusiness.id).map((msg, i) => {
+                    const isManager = msg.sender_role === "manager";
+                    return (
+                      <div key={i} style={{ display: "flex", justifyContent: isManager ? "flex-end" : "flex-start" }}>
+                        <div style={{ maxWidth: "70%", padding: "10px 14px", borderRadius: isManager ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isManager ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : "#F0F4FA", color: isManager ? "#fff" : C.text, fontFamily: font.body, fontSize: 14, lineHeight: 1.5 }}>
+                          {!isManager && <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, marginBottom: 4 }}>{msg.sender_name || selectedBusiness.name}</div>}
+                          {msg.message}
+                          <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, textAlign: isManager ? "right" : "left" }}>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <input value={managerChatInput} onChange={e => setManagerChatInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendManagerMessage(selectedBusiness.id)}
+                    placeholder={"Message " + selectedBusiness.name + "..."}
+                    style={{ flex: 1, padding: "11px 16px", border: `1px solid ${C.border}`, borderRadius: 22, fontFamily: font.body, fontSize: 14, outline: "none", background: C.bg, color: C.text }} />
+                  <button onClick={() => sendManagerMessage(selectedBusiness.id)} disabled={managerChatSending || !managerChatInput.trim()}
+                    style={{ padding: "0 20px", borderRadius: 22, background: managerChatInput.trim() ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : C.border, border: "none", cursor: managerChatInput.trim() ? "pointer" : "default", color: "#fff", fontFamily: font.body, fontSize: 14, fontWeight: 600 }}>
+                    Send
+                  </button>
+                </div>
+              </div>
+            )}
 
             {selectedBizTab === "analytics" && (
               <AnalyticsTab
@@ -994,6 +1113,11 @@ function MarketingDashboard({ data, onSignOut }) {
                         </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        {unreadChatByBiz[b.id] > 0 && (
+                          <div style={{ background: "#E85D04", color: "#fff", borderRadius: 99, padding: "3px 9px", fontFamily: font.mono, fontSize: 11, fontWeight: "bold", display: "flex", alignItems: "center", gap: 4 }}>
+                            💬 {unreadChatByBiz[b.id]}
+                          </div>
+                        )}
                         <div style={{ textAlign: "right" }}>
                           <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: isActive ? C.greenBg : "#FFF3CD", color: isActive ? C.green : "#856404", border: `1px solid ${isActive ? C.green + "33" : "#FFC10733"}`, fontWeight: 600 }}>{isActive ? "Active" : "Inactive"}</span>
                           <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 6 }}>{bizMsgs.length} texts · {thisMonth.length} this month</div>
@@ -1130,6 +1254,29 @@ function AccountManagerDashboard({ data, onSignOut }) {
   const [selectedBizPhotos, setSelectedBizPhotos] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
   const menuRef = useRef(null);
+  const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
+  const [managerChatMessages, setManagerChatMessages] = useState([]);
+  const [managerChatInput, setManagerChatInput] = useState("");
+  const [managerChatSending, setManagerChatSending] = useState(false);
+
+  const loadManagerChat = async (bizId) => {
+    const { data: msgs } = await supabase.from("chat_messages")
+      .select("*").eq("business_id", bizId).order("created_at", { ascending: true });
+    if (msgs) setManagerChatMessages(msgs);
+    await supabase.from("chat_messages").update({ read: true })
+      .eq("business_id", bizId).eq("sender_role", "owner").eq("read", false);
+    setUnreadChatByBiz(prev => ({ ...prev, [bizId]: 0 }));
+  };
+
+  const sendManagerMessage = async (bizId) => {
+    if (!managerChatInput.trim()) return;
+    setManagerChatSending(true);
+    const msg = { business_id: bizId, sender_role: "manager", sender_name: data.name, message: managerChatInput.trim(), read: false };
+    const { data: inserted } = await supabase.from("chat_messages").insert([msg]).select().single();
+    if (inserted) setManagerChatMessages(prev => [...prev, inserted]);
+    setManagerChatInput("");
+    setManagerChatSending(false);
+  };
 
   useEffect(() => {
     loadData();
@@ -1151,6 +1298,15 @@ function AccountManagerDashboard({ data, onSignOut }) {
           const counts = {};
           photos.forEach(p => { counts[p.business_id] = (counts[p.business_id] || 0) + 1; });
           setPendingPhotosByBiz(counts);
+        }
+        // Load unread chat counts
+        const { data: unread } = await supabase.from("chat_messages")
+          .select("business_id").in("business_id", ids)
+          .eq("sender_role", "owner").eq("read", false);
+        if (unread) {
+          const chatCounts = {};
+          unread.forEach(m => { chatCounts[m.business_id] = (chatCounts[m.business_id] || 0) + 1; });
+          setUnreadChatByBiz(chatCounts);
         }
       }
     }
@@ -1240,10 +1396,11 @@ function AccountManagerDashboard({ data, onSignOut }) {
             </div>
 
             <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}`, flexWrap: "wrap" }}>
-              {[["analytics","📊 Analytics"],["photos","📸 Photos"],["bulk","📤 Bulk Send"],["history","📋 History"],["settings","⚙️ Settings"]].map(([id, label]) => {
+              {[["messages","💬 Messages"],["analytics","📊 Analytics"],["photos","📸 Photos"],["bulk","📤 Bulk Send"],["history","📋 History"],["settings","⚙️ Settings"]].map(([id, label]) => {
                 const pendingCount = id === "photos" ? (pendingPhotosByBiz[selectedBusiness.id] || 0) : 0;
+                const chatCount = id === "messages" ? (unreadChatByBiz[selectedBusiness.id] || 0) : 0;
                 return (
-                  <button key={id} onClick={() => setSelectedBizTab(id)}
+                  <button key={id} onClick={() => { setSelectedBizTab(id); if (id === "messages") loadManagerChat(selectedBusiness.id); }}
                     style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selectedBizTab === id ? C.gold : "none", color: selectedBizTab === id ? "#fff" : C.textMuted, fontFamily: font.body, fontSize: 13, fontWeight: selectedBizTab === id ? 600 : 400, cursor: "pointer", position: "relative", minWidth: 80 }}>
                     {label}
                     {pendingCount > 0 && (
@@ -1251,11 +1408,48 @@ function AccountManagerDashboard({ data, onSignOut }) {
                         {pendingCount > 9 ? "9+" : pendingCount}
                       </span>
                     )}
+                    {chatCount > 0 && (
+                      <span style={{ position: "absolute", top: 4, right: 8, background: "#E85D04", color: "#fff", borderRadius: 99, padding: "1px 5px", fontFamily: font.mono, fontSize: 9, fontWeight: "bold" }}>
+                        {chatCount}
+                      </span>
+                    )}
                   </button>
                 );
               })}
             </div>
 
+
+            {selectedBizTab === "messages" && (
+              <div style={{ padding: "4px 0 16px" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 300, maxHeight: 480, overflowY: "auto", marginBottom: 16 }}>
+                  {managerChatMessages.filter(m => m.business_id === selectedBusiness.id).length === 0 && (
+                    <div style={{ textAlign: "center", padding: "40px 20px", color: C.textMuted, fontFamily: font.body, fontSize: 14 }}>No messages yet. Send a message to start the conversation.</div>
+                  )}
+                  {managerChatMessages.filter(m => m.business_id === selectedBusiness.id).map((msg, i) => {
+                    const isManager = msg.sender_role === "manager";
+                    return (
+                      <div key={i} style={{ display: "flex", justifyContent: isManager ? "flex-end" : "flex-start" }}>
+                        <div style={{ maxWidth: "70%", padding: "10px 14px", borderRadius: isManager ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isManager ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : "#F0F4FA", color: isManager ? "#fff" : C.text, fontFamily: font.body, fontSize: 14, lineHeight: 1.5 }}>
+                          {!isManager && <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, marginBottom: 4 }}>{msg.sender_name || selectedBusiness.name}</div>}
+                          {msg.message}
+                          <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, textAlign: isManager ? "right" : "left" }}>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 10 }}>
+                  <input value={managerChatInput} onChange={e => setManagerChatInput(e.target.value)}
+                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendManagerMessage(selectedBusiness.id)}
+                    placeholder={"Message " + selectedBusiness.name + "..."}
+                    style={{ flex: 1, padding: "11px 16px", border: `1px solid ${C.border}`, borderRadius: 22, fontFamily: font.body, fontSize: 14, outline: "none", background: C.bg, color: C.text }} />
+                  <button onClick={() => sendManagerMessage(selectedBusiness.id)} disabled={managerChatSending || !managerChatInput.trim()}
+                    style={{ padding: "0 20px", borderRadius: 22, background: managerChatInput.trim() ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : C.border, border: "none", cursor: managerChatInput.trim() ? "pointer" : "default", color: "#fff", fontFamily: font.body, fontSize: 14, fontWeight: 600 }}>
+                    Send
+                  </button>
+                </div>
+              </div>
+            )}
 
             {selectedBizTab === "analytics" && (
               <AnalyticsTab
@@ -1356,6 +1550,11 @@ function AccountManagerDashboard({ data, onSignOut }) {
                         </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        {unreadChatByBiz[b.id] > 0 && (
+                          <div style={{ background: "#E85D04", color: "#fff", borderRadius: 99, padding: "3px 9px", fontFamily: font.mono, fontSize: 11, fontWeight: "bold", display: "flex", alignItems: "center", gap: 4 }}>
+                            💬 {unreadChatByBiz[b.id]}
+                          </div>
+                        )}
                         <div style={{ textAlign: "right" }}>
                           <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: isActive ? C.greenBg : "#FFF3CD", color: isActive ? C.green : "#856404", border: `1px solid ${isActive ? C.green + "33" : "#FFC10733"}`, fontWeight: 600 }}>{isActive ? "Active" : "Inactive"}</span>
                           <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 6 }}>{bizMsgs.length} texts · {thisMonth.length} this month</div>
@@ -1434,10 +1633,63 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   const [addingEmployee, setAddingEmployee] = useState(false);
   const [employeeSaving, setEmployeeSaving] = useState(false);
 
+  // Chat state
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [chatSending, setChatSending] = useState(false);
+  const [unreadFromManager, setUnreadFromManager] = useState(0);
+  const chatBottomRef = useState(null);
+
+  const loadChat = async () => {
+    const { data: msgs } = await supabase.from("chat_messages")
+      .select("*").eq("business_id", data.id).order("created_at", { ascending: true });
+    if (msgs) {
+      setChatMessages(msgs);
+      const unread = msgs.filter(m => m.sender_role === "manager" && !m.read).length;
+      setUnreadFromManager(unread);
+      if (navigator.setAppBadge) {
+        unread > 0 ? navigator.setAppBadge(unread) : navigator.clearAppBadge();
+      }
+    }
+  };
+
+  const markManagerMessagesRead = async () => {
+    await supabase.from("chat_messages")
+      .update({ read: true })
+      .eq("business_id", data.id)
+      .eq("sender_role", "manager")
+      .eq("read", false);
+    setUnreadFromManager(0);
+    if (navigator.clearAppBadge) navigator.clearAppBadge();
+  };
+
+  const sendChatMessage = async () => {
+    if (!chatInput.trim()) return;
+    setChatSending(true);
+    const msg = { business_id: data.id, sender_role: "owner", sender_name: settings.name, message: chatInput.trim(), read: false };
+    const { data: inserted } = await supabase.from("chat_messages").insert([msg]).select().single();
+    if (inserted) setChatMessages(prev => [...prev, inserted]);
+    setChatInput("");
+    setChatSending(false);
+  };
+
   useEffect(() => {
     supabase.from("employees").select("*").eq("business_id", data.id).then(({ data: emps }) => {
       setEmployees(emps || []);
     });
+    loadChat();
+    // Real-time chat subscription
+    const chatSub = supabase.channel("chat_" + data.id)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "chat_messages", filter: "business_id=eq." + data.id }, (payload) => {
+        setChatMessages(prev => [...prev, payload.new]);
+        if (payload.new.sender_role === "manager") {
+          setUnreadFromManager(prev => prev + 1);
+          if (navigator.setAppBadge) navigator.setAppBadge(1);
+        }
+      })
+      .subscribe();
+    return () => supabase.removeChannel(chatSub);
   }, [data.id]);
 
   const addEmployee = async () => {
@@ -1867,6 +2119,79 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
           </button>
         ))}
       </div>
+
+      {/* Floating Chat Bubble */}
+      <button onClick={() => { setChatOpen(true); markManagerMessagesRead(); }}
+        style={{ position: "fixed", bottom: 90, right: 20, width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px rgba(26,95,191,0.45)", zIndex: 50, transition: "transform 0.2s" }}
+        onMouseEnter={e => e.currentTarget.style.transform = "scale(1.08)"}
+        onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="white"/>
+        </svg>
+        {unreadFromManager > 0 && (
+          <div style={{ position: "absolute", top: -4, right: -4, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 11, fontWeight: "bold", border: "2px solid #F4F7FB" }}>
+            {unreadFromManager > 9 ? "9+" : unreadFromManager}
+          </div>
+        )}
+      </button>
+
+      {/* Chat Modal */}
+      {chatOpen && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column" }}>
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }} onClick={() => setChatOpen(false)} />
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "#fff", borderRadius: "20px 20px 0 0", display: "flex", flexDirection: "column", maxHeight: "80vh", boxShadow: "0 -8px 40px rgba(0,0,0,0.2)" }}>
+
+            {/* Chat header */}
+            <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #E5EAF2", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+              <div style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>👤</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontFamily: font.display, fontSize: 15, fontWeight: 700, color: "#0D1117" }}>Your Account Manager</div>
+                <div style={{ fontFamily: font.body, fontSize: 12, color: "#6B7A99" }}>Talk with your account manager</div>
+              </div>
+              <button onClick={() => setChatOpen(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9DADC4", lineHeight: 1 }}>×</button>
+            </div>
+
+            {/* Messages */}
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
+              {chatMessages.length === 0 && (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#9DADC4", fontFamily: font.body, fontSize: 14 }}>
+                  No messages yet. Send a message to your account manager!
+                </div>
+              )}
+              {chatMessages.map((msg, i) => {
+                const isOwner = msg.sender_role === "owner";
+                return (
+                  <div key={i} style={{ display: "flex", justifyContent: isOwner ? "flex-end" : "flex-start" }}>
+                    <div style={{ maxWidth: "75%", padding: "10px 14px", borderRadius: isOwner ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isOwner ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : "#F0F4FA", color: isOwner ? "#fff" : "#0D1117", fontFamily: font.body, fontSize: 14, lineHeight: 1.5 }}>
+                      {msg.message}
+                      <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, textAlign: isOwner ? "right" : "left" }}>
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Input */}
+            <div style={{ padding: "12px 16px 20px", borderTop: "1px solid #E5EAF2", display: "flex", gap: 10, flexShrink: 0 }}>
+              <input
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChatMessage()}
+                placeholder="Message your account manager..."
+                style={{ flex: 1, padding: "11px 16px", border: "1px solid #D6E2F0", borderRadius: 22, fontFamily: font.body, fontSize: 14, outline: "none", background: "#F4F7FB", color: "#0D1117" }}
+              />
+              <button onClick={sendChatMessage} disabled={chatSending || !chatInput.trim()}
+                style={{ width: 42, height: 42, borderRadius: "50%", background: chatInput.trim() ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : "#D6E2F0", border: "none", cursor: chatInput.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.2s" }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
