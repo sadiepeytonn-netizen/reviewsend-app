@@ -1608,6 +1608,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   const [chatSending, setChatSending] = useState(false);
   const [unreadFromManager, setUnreadFromManager] = useState(0);
   const chatBottomRef = useState(null);
+  const [historySearch, setHistorySearch] = useState("");
 
   const loadChat = async () => {
     const { data: msgs } = await supabase.from("chat_messages")
@@ -1801,58 +1802,32 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   ];
 
   return (
-    <div style={{ position: "fixed", inset: 0, background: C.bg, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+    <div style={{ position: "fixed", inset: 0, background: "#F4F7FB", display: "flex", flexDirection: "column", overflow: "hidden" }}>
       <style>{globalCSS}</style>
 
-      {/* Top bar */}
-      <div style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, padding: "0 20px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0 }}>
-        <div style={{ fontFamily: font.body, fontSize: 12, letterSpacing: 5, color: C.gold }}>★ REVIEWSEND</div>
-        <div style={{ fontFamily: font.display, fontSize: 14, color: C.text, fontWeight: 600 }}>{settings.name}</div>
-        <button onClick={onSignOut} style={{ background: "none", border: "none", fontFamily: font.body, fontSize: 13, color: C.textMuted, cursor: "pointer" }}>Sign out</button>
+      {/* Top Bar */}
+      <div style={{ background: "#fff", borderBottom: "1px solid rgba(26,95,191,0.1)", padding: "0 20px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", flexShrink: 0, boxShadow: "0 1px 12px rgba(26,95,191,0.06)" }}>
+        <div style={{ fontFamily: font.body, fontSize: 10, letterSpacing: 5, color: "#1A5FBF", textTransform: "uppercase", fontWeight: 600 }}>★ ReviewSend</div>
+        <div style={{ fontFamily: font.display, fontSize: 15, color: "#0D1117", fontWeight: 700 }}>{settings.name}</div>
+        <button onClick={onSignOut} style={{ background: "none", border: "none", fontFamily: font.body, fontSize: 12, color: "rgba(13,17,23,0.35)", cursor: "pointer", letterSpacing: 0.5 }}>Sign out</button>
       </div>
 
       {/* Page content */}
       <div style={{ flex: 1, overflow: "hidden", position: "relative" }}>
 
-        {/* SEND */}
+        {/* ── SEND TAB ── */}
         {tab === "send" && !features.send && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 24px" }}>
-            <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.4 }}>🔒</div>
-            <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text, marginBottom: 8 }}>Review Requests Locked</div>
-            <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, lineHeight: 1.6 }}>This feature is not enabled on your current plan. Contact your account manager to upgrade.</div>
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 32px" }}>
+            <div style={{ fontSize: 52, marginBottom: 16, opacity: 0.3 }}>🔒</div>
+            <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: "#0D1117", marginBottom: 10 }}>Review Requests Locked</div>
+            <div style={{ fontFamily: font.body, fontSize: 15, color: "rgba(13,17,23,0.5)", lineHeight: 1.7 }}>This feature is not enabled on your current plan. Contact your account manager to upgrade.</div>
           </div>
         )}
-        {tab === "send" && features.send && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", justifyContent: "center", padding: "20px 24px", gap: 16 }}>
-            <div style={{ textAlign: "center", marginBottom: 4 }}>
-              <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Send a Review Request</div>
-              <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 4 }}>Text a customer a direct link</div>
-            </div>
-            <div style={card}>
-              <div style={{ marginBottom: 16 }}>
-                <Label>Customer Name</Label>
-                <input style={inputStyle} placeholder="e.g. Sarah" value={customerName} onChange={e => setCustomerName(e.target.value)} />
-              </div>
-              <div style={{ marginBottom: 16 }}>
-                <Label>Phone Number</Label>
-                <input style={inputStyle} placeholder="(555) 000-0000" value={phone} onChange={e => setPhone(e.target.value)} />
-              </div>
-              <div style={{ marginBottom: 20 }}>
-                <Label><span style={{ display: "block", textAlign: "center" }}>Review Platform</span></Label>
-                <div style={{ display: "flex", gap: 12 }}>
-                  {PLATFORMS.map(p => (
-                    <button key={p.id} onClick={() => setPlatform(p.id)}
-                      style={{ flex: 1, display: "flex", alignItems: "center", gap: 10, padding: "11px 16px", borderRadius: 10, border: `1.5px solid ${platform === p.id ? p.color : C.border}`, background: platform === p.id ? p.color + "18" : C.bg, cursor: "pointer", fontFamily: font.body, fontSize: 15, color: platform === p.id ? p.color : C.textMuted, fontWeight: platform === p.id ? 600 : 400, transition: "all 0.2s" }}>
-                      <span style={{ width: 26, height: 26, borderRadius: 7, background: p.color, color: "#fff", fontSize: 12, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{p.icon}</span>
-                      {p.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <SendBtn onClick={handleSend} sending={sending} sent={sent} disabled={!phone || !customerName} />
-            </div>
 
-            {/* Locked features widget */}
+        {tab === "send" && features.send && (
+          <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "24px 20px 20px" }}>
+
+            {/* Locked features notice */}
             {(() => {
               const lockedList = [
                 !features.send && "Review Requests",
@@ -1862,242 +1837,263 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                 !features.social && "Instagram & Facebook",
               ].filter(Boolean);
               return lockedList.length > 0 ? (
-                <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: "11px 14px", display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 30, height: 30, borderRadius: "50%", background: C.surfaceHover, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>🔒</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: font.display, fontSize: 13, fontWeight: 600, color: C.text }}>Features Locked</div>
-                    <div style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, marginTop: 1 }}>
-                      {lockedList.join(", ")} not enabled on your plan
-                    </div>
+                <div style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+                  <span style={{ fontSize: 16 }}>🔒</span>
+                  <div style={{ fontFamily: font.body, fontSize: 12, color: "#9A3412", flex: 1 }}>
+                    <strong>Locked:</strong> {lockedList.join(", ")}
                   </div>
-                  {!isEmployee && <div style={{ fontFamily: font.body, fontSize: 11, color: C.gold, fontWeight: 600, background: C.surfaceHover, border: `1px solid ${C.border}`, borderRadius: 99, padding: "5px 10px", whiteSpace: "nowrap", cursor: "pointer" }}>Contact Manager</div>}
+                  {!isEmployee && <div style={{ fontFamily: font.body, fontSize: 11, color: "#9A3412", fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>Contact Manager</div>}
                 </div>
               ) : null;
             })()}
+
+            {/* Hero title */}
+            <div style={{ textAlign: "center", marginBottom: 20 }}>
+              <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: "#0D1117", marginBottom: 4 }}>Send a Review Request</div>
+              <div style={{ fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.45)" }}>Text a customer a direct review link</div>
+            </div>
+
+            {/* Form card */}
+            <div style={{ background: "#fff", borderRadius: 20, padding: 20, boxShadow: "0 4px 24px rgba(26,95,191,0.08)", border: "1px solid rgba(26,95,191,0.08)", marginBottom: 16 }}>
+              <label style={{ display: "block", fontFamily: font.body, fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 6 }}>Customer Name</label>
+              <input value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="e.g. Sarah"
+                style={{ width: "100%", padding: "13px 16px", background: "#F4F7FB", border: "1.5px solid rgba(26,95,191,0.1)", borderRadius: 12, fontSize: 15, fontFamily: font.body, color: "#0D1117", outline: "none", marginBottom: 14, transition: "border-color 0.2s" }} />
+              <label style={{ display: "block", fontFamily: font.body, fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 6 }}>Phone Number</label>
+              <input value={phone} onChange={e => setPhone(e.target.value)} placeholder="(555) 000-0000" type="tel"
+                style={{ width: "100%", padding: "13px 16px", background: "#F4F7FB", border: "1.5px solid rgba(26,95,191,0.1)", borderRadius: 12, fontSize: 15, fontFamily: font.body, color: "#0D1117", outline: "none", marginBottom: 14, transition: "border-color 0.2s" }} />
+              <label style={{ display: "block", fontFamily: font.body, fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 8 }}>Review Platform</label>
+              <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
+                {[["google", "G", "#4A90D9", "Google"], ["yelp", "Y", "#C0392B", "Yelp"]].map(([id, abbr, color, name]) => (
+                  <button key={id} onClick={() => setPlatform(id)}
+                    style={{ flex: 1, padding: "12px 8px", borderRadius: 14, border: `1.5px solid ${platform === id ? color : "rgba(26,95,191,0.12)"}`, background: platform === id ? color + "10" : "#F4F7FB", cursor: "pointer", display: "flex", flexDirection: "column", alignItems: "center", gap: 6, transition: "all 0.15s" }}>
+                    <div style={{ width: 34, height: 34, borderRadius: 10, background: platform === id ? color : "rgba(13,17,23,0.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, color: "#fff", transition: "background 0.15s" }}>{abbr}</div>
+                    <span style={{ fontFamily: font.body, fontSize: 12, fontWeight: 700, color: platform === id ? color : "rgba(13,17,23,0.45)" }}>{name}</span>
+                  </button>
+                ))}
+              </div>
+              <button onClick={handleSend} disabled={sending || sent || !customerName || !phone}
+                style={{ width: "100%", padding: "16px", background: sent ? "#1A8C4E" : (sending || !customerName || !phone) ? "rgba(26,95,191,0.3)" : "linear-gradient(135deg, #1A5FBF, #0d3d8a)", color: "#fff", border: "none", borderRadius: 14, fontSize: 15, fontWeight: 700, fontFamily: font.body, cursor: (sending || !customerName || !phone) ? "not-allowed" : "pointer", letterSpacing: 0.5, boxShadow: sent || sending || !customerName || !phone ? "none" : "0 8px 24px rgba(26,95,191,0.35)", transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+                {sent ? "✓ Sent!" : sending ? "Sending…" : "✉ Send Review Request"}
+              </button>
+            </div>
+
+            {/* Quick stats row */}
+            {msgLog.length > 0 && (
+              <div style={{ display: "flex", gap: 10 }}>
+                {[
+                  { num: msgLog.length, label: "Total Sent", color: "#1A5FBF" },
+                  { num: msgLog.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length, label: "This Month", color: "#1A8C4E" },
+                  { num: msgLog.filter(m => m.platform === "Google").length, label: "Google", color: "#4A90D9" },
+                ].map((s, i) => (
+                  <div key={i} style={{ flex: 1, background: "#fff", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: "1px solid rgba(26,95,191,0.08)", boxShadow: "0 2px 8px rgba(26,95,191,0.04)" }}>
+                    <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.num}</div>
+                    <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.4)", marginTop: 4, letterSpacing: 0.5 }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
-        {/* PHOTOS — always open for everyone, GP2 always works */}
+        {/* ── PHOTOS TAB ── */}
         {tab === "photos" && (
-          <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "20px 24px 20px" }}>
+          <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "24px 20px 20px" }}>
             <PhotosTab businessId={data.id} businessName={settings.name} features={features} />
           </div>
         )}
 
-        {/* HISTORY */}
+        {/* ── HISTORY TAB ── */}
         {tab === "log" && !features.history && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 24px" }}>
-            <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.4 }}>🔒</div>
-            <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text, marginBottom: 8 }}>History Locked</div>
-            <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, lineHeight: 1.6 }}>This feature is not enabled on your current plan. Contact your account manager to upgrade.</div>
+          <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 32px" }}>
+            <div style={{ fontSize: 52, marginBottom: 16, opacity: 0.3 }}>🔒</div>
+            <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: "#0D1117", marginBottom: 10 }}>History Locked</div>
+            <div style={{ fontFamily: font.body, fontSize: 15, color: "rgba(13,17,23,0.5)", lineHeight: 1.7 }}>This feature is not enabled on your current plan.</div>
           </div>
         )}
+
         {tab === "log" && features.history && (
-          <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "20px 24px" }}>
-            <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Message History</div>
-              <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 4 }}>{log.length} messages sent</div>
+          <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "24px 20px 20px" }}>
+            <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: "#0D1117", marginBottom: 4 }}>History</div>
+            <div style={{ fontFamily: font.body, fontSize: 12, color: "rgba(13,17,23,0.4)", marginBottom: 16 }}>All review requests sent</div>
+            {/* Search */}
+            <div style={{ background: "#fff", border: "1.5px solid rgba(26,95,191,0.12)", borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              <span style={{ color: "rgba(13,17,23,0.3)", fontSize: 14 }}>🔍</span>
+              <input value={historySearch || ""} onChange={e => setHistorySearch && setHistorySearch(e.target.value)} placeholder="Search by name..." style={{ flex: 1, border: "none", outline: "none", fontFamily: font.body, fontSize: 13, color: "#0D1117", background: "transparent" }} />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {log.map((row, i) => (
-                <div key={i} style={{ ...card, padding: "16px 18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 15, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{row.customer_name.charAt(0)}</div>
-                      <div>
-                        <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{row.customer_name}</div>
-                        <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{row.customer_phone}</div>
-                      </div>
-                    </div>
-                    <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: C.greenBg, color: C.green, border: `1px solid ${C.green}33`, fontWeight: 600 }}>Delivered</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {msgLog.filter(m => !historySearch || m.customer_name?.toLowerCase().includes(historySearch.toLowerCase()) || m.customer_phone?.includes(historySearch)).map((msg, i) => (
+                <div key={i} style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, border: "1px solid rgba(26,95,191,0.08)", boxShadow: "0 2px 8px rgba(26,95,191,0.04)" }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #B8CCE8)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.display, fontSize: 16, fontWeight: 700, color: "#1A5FBF", flexShrink: 0 }}>
+                    {msg.customer_name?.[0]?.toUpperCase() || "?"}
                   </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontFamily: font.body, fontSize: 12, padding: "3px 10px", borderRadius: 99, background: row.platform === "Google" ? "#4A90D918" : "#C0392B18", color: row.platform === "Google" ? "#4A90D9" : "#e74c3c", border: `1px solid ${row.platform === "Google" ? "#4A90D933" : "#C0392B33"}`, fontWeight: 600 }}>{row.platform}</span>
-                    <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{new Date(row.sent_at).toLocaleDateString()}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: font.body, fontSize: 14, fontWeight: 700, color: "#0D1117" }}>{msg.customer_name}</div>
+                    <div style={{ fontFamily: "'Courier New', monospace", fontSize: 11, color: "rgba(13,17,23,0.4)", marginTop: 2 }}>{msg.customer_phone}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ display: "inline-block", padding: "3px 10px", borderRadius: 6, fontSize: 10, fontWeight: 700, background: msg.platform === "Google" ? "#EEF3FA" : "#FEF2F2", color: msg.platform === "Google" ? "#4A90D9" : "#C0392B" }}>{msg.platform}</div>
+                    <div style={{ fontFamily: "'Courier New', monospace", fontSize: 10, color: "rgba(13,17,23,0.3)", marginTop: 4 }}>{new Date(msg.sent_at).toLocaleDateString()}</div>
                   </div>
                 </div>
               ))}
-              {log.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No messages sent yet.</div>}
+              {msgLog.length === 0 && <div style={{ textAlign: "center", padding: 40, fontFamily: font.body, fontSize: 15, color: "rgba(13,17,23,0.4)" }}>No requests sent yet.</div>}
             </div>
           </div>
         )}
 
-        {/* SETTINGS */}
-        {tab === "settings" && (
-          <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "20px 24px" }}>
-            <div style={{ textAlign: "center", marginBottom: 20 }}>
-              <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Settings</div>
-              <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 4 }}>Manage your business profile</div>
+        {/* ── ANALYTICS TAB ── */}
+        {tab === "analytics" && (
+          features.analytics ? (
+            <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "24px 20px 20px" }}>
+              <AnalyticsTab log={msgLog} businessName={settings.name} photos={[]} socialLinks={settings.social_links || {}} onNavigate={setTab} embedded={true} />
             </div>
-            <div style={{ ...card, maxWidth: 520, margin: "0 auto" }}>
+          ) : (
+            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 32px" }}>
+              <div style={{ fontSize: 52, marginBottom: 16, opacity: 0.3 }}>🔒</div>
+              <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: "#0D1117", marginBottom: 10 }}>Analytics Locked</div>
+              <div style={{ fontFamily: font.body, fontSize: 15, color: "rgba(13,17,23,0.5)", lineHeight: 1.7 }}>Contact your account manager to unlock analytics.</div>
+            </div>
+          )
+        )}
+
+        {/* ── SETTINGS TAB ── */}
+        {tab === "settings" && !isEmployee && (
+          <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "24px 20px 20px" }}>
+            <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: "#0D1117", marginBottom: 4 }}>Settings</div>
+            <div style={{ fontFamily: font.body, fontSize: 12, color: "rgba(13,17,23,0.4)", marginBottom: 20 }}>Manage your account</div>
+
+            {/* Business info card */}
+            <div style={{ background: "#fff", borderRadius: 18, overflow: "hidden", border: "1px solid rgba(26,95,191,0.08)", marginBottom: 16, boxShadow: "0 2px 12px rgba(26,95,191,0.06)" }}>
+              <div style={{ padding: "10px 16px", background: "#F4F7FB", borderBottom: "1px solid rgba(26,95,191,0.08)" }}>
+                <div style={{ fontFamily: font.body, fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.35)" }}>Business Info</div>
+              </div>
               {[
-                { label: "Business Name", key: "name", placeholder: "Your Business Name" },
-                { label: "Google Review Link", key: "google_link", placeholder: "https://g.page/r/..." },
-                { label: "Yelp Review Link", key: "yelp_link", placeholder: "https://www.yelp.com/biz/..." },
-              ].map(f => (
-                <div key={f.key} style={{ marginBottom: 16 }}>
-                  <Label>{f.label}</Label>
-                  <input style={{ ...inputStyle, ...(editingSettings ? {} : { opacity: 0.5 }) }}
-                    value={editingSettings ? draftSettings[f.key] : settings[f.key]}
-                    placeholder={f.placeholder} disabled={!editingSettings}
-                    onChange={e => setDraftSettings(d => ({ ...d, [f.key]: e.target.value }))} />
+                { icon: "🏪", label: "Business Name", val: settings.name, key: "name" },
+                { icon: "🔗", label: "Google Review Link", val: settings.google_link, key: "google_link" },
+                { icon: "⭐", label: "Yelp Review Link", val: settings.yelp_link, key: "yelp_link" },
+              ].map((row, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", padding: "14px 16px", borderBottom: "1px solid rgba(26,95,191,0.06)", gap: 12 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: "#EEF3FA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, flexShrink: 0 }}>{row.icon}</div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.4)", marginBottom: 2 }}>{row.label}</div>
+                    {editingSettings ? (
+                      <input value={draftSettings[row.key] || ""} onChange={e => setDraftSettings(s => ({ ...s, [row.key]: e.target.value }))}
+                        style={{ width: "100%", padding: "6px 10px", border: "1.5px solid rgba(26,95,191,0.2)", borderRadius: 8, fontFamily: font.body, fontSize: 13, color: "#0D1117", outline: "none", background: "#F4F7FB" }} />
+                    ) : (
+                      <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 600, color: "#0D1117", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.val || "Not set"}</div>
+                    )}
+                  </div>
+                  {!editingSettings && <span style={{ color: "rgba(13,17,23,0.2)", fontSize: 16 }}>›</span>}
                 </div>
               ))}
-              <div style={{ marginBottom: 20 }}>
-                <Label>Message Template</Label>
-                <textarea rows={3} style={{ ...inputStyle, resize: "none", lineHeight: 1.6, ...(editingSettings ? {} : { opacity: 0.5 }) }}
-                  value={editingSettings ? draftSettings.message_template : settings.message_template}
-                  disabled={!editingSettings}
-                  onChange={e => setDraftSettings(d => ({ ...d, message_template: e.target.value }))} />
+              <div style={{ padding: 16 }}>
+                {editingSettings ? (
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={saveSettings} style={{ flex: 1, padding: "12px", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", color: "#fff", border: "none", borderRadius: 12, fontFamily: font.body, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Save Changes</button>
+                    <button onClick={() => { setEditingSettings(false); setDraftSettings(settings); }} style={{ flex: 1, padding: "12px", background: "#F4F7FB", color: "rgba(13,17,23,0.6)", border: "1.5px solid rgba(26,95,191,0.12)", borderRadius: 12, fontFamily: font.body, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                  </div>
+                ) : (
+                  <button onClick={() => setEditingSettings(true)} style={{ width: "100%", padding: "12px", background: "#F4F7FB", color: "#1A5FBF", border: "1.5px solid rgba(26,95,191,0.2)", borderRadius: 12, fontFamily: font.body, fontSize: 14, fontWeight: 700, cursor: "pointer" }}>Edit Info</button>
+                )}
               </div>
+            </div>
 
-              {/* Logo upload */}
-              <div style={{ marginBottom: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
-                <Label>Business Logo</Label>
-                <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginBottom: 10 }}>
-                  Your logo will automatically be sent with every review request as an image message.
-                </p>
+            {/* Logo card */}
+            <div style={{ background: "#fff", borderRadius: 18, overflow: "hidden", border: "1px solid rgba(26,95,191,0.08)", marginBottom: 16, boxShadow: "0 2px 12px rgba(26,95,191,0.06)" }}>
+              <div style={{ padding: "10px 16px", background: "#F4F7FB", borderBottom: "1px solid rgba(26,95,191,0.08)" }}>
+                <div style={{ fontFamily: font.body, fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.35)" }}>Business Logo</div>
+              </div>
+              <div style={{ padding: 16 }}>
                 {settings.logo_url ? (
-                  <div style={{ display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", background: C.surfaceHover, borderRadius: 10, border: `1px solid ${C.border}` }}>
-                    <img src={settings.logo_url} alt="Logo" style={{ width: 52, height: 52, borderRadius: 8, objectFit: "contain", background: "#fff", border: `1px solid ${C.border}` }} />
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <img src={settings.logo_url} alt="Logo" style={{ width: 56, height: 56, borderRadius: 12, objectFit: "cover", border: "1px solid rgba(26,95,191,0.12)" }} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontFamily: font.display, fontSize: 14, color: C.text, fontWeight: 600 }}>Logo uploaded ✅</div>
-                      <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 2 }}>Sent with every review request</div>
+                      <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 600, color: "#0D1117", marginBottom: 4 }}>Logo uploaded</div>
+                      <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.4)" }}>Sent with every MMS message</div>
                     </div>
-                    <button onClick={removeLogo} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontFamily: font.body, fontSize: 13 }}>Remove</button>
+                    <button onClick={removeLogo} style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 20, lineHeight: 1 }}>×</button>
                   </div>
                 ) : (
                   <div>
                     <input type="file" ref={logoInputRef} onChange={handleLogoUpload} accept="image/*" style={{ display: "none" }} />
                     <button onClick={() => logoInputRef.current?.click()} disabled={logoUploading}
-                      style={{ ...ghostBtnStyle, width: "100%", textAlign: "center" }}>
-                      {logoUploading ? "Uploading…" : "🖼️ Upload Business Logo"}
+                      style={{ width: "100%", padding: "12px", background: "#F4F7FB", color: "#1A5FBF", border: "1.5px dashed rgba(26,95,191,0.25)", borderRadius: 12, fontFamily: font.body, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
+                      {logoUploading ? "Uploading…" : "📷 Upload Logo"}
                     </button>
+                    <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.4)", textAlign: "center", marginTop: 8 }}>Logo will be sent with every review request</div>
                   </div>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 12 }}>
-                {editingSettings ? (
-                  <>
-                    <button onClick={saveSettings} style={{ ...btnStyle, flex: 1 }}>Save</button>
-                    <button onClick={() => { setDraftSettings({ ...settings }); setEditingSettings(false); }} style={{ ...ghostBtnStyle, flex: 1 }}>Cancel</button>
-                  </>
-                ) : (
-                  <button onClick={() => { setDraftSettings({ ...settings }); setEditingSettings(true); }}
-                    style={{ flex: 1, padding: "13px", background: "none", border: `1px solid #1A5FBF88`, borderRadius: 10, color: "#1A5FBF", cursor: "pointer", fontFamily: font.body, fontSize: 15 }}>
-                    Edit Settings
-                  </button>
+            </div>
+
+            {/* Message template card */}
+            <div style={{ background: "#fff", borderRadius: 18, overflow: "hidden", border: "1px solid rgba(26,95,191,0.08)", marginBottom: 16, boxShadow: "0 2px 12px rgba(26,95,191,0.06)" }}>
+              <div style={{ padding: "10px 16px", background: "#F4F7FB", borderBottom: "1px solid rgba(26,95,191,0.08)" }}>
+                <div style={{ fontFamily: font.body, fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.35)" }}>Message Template</div>
+              </div>
+              <div style={{ padding: 16 }}>
+                <textarea rows={4} value={editingSettings ? draftSettings.message_template : settings.message_template} onChange={e => setDraftSettings(s => ({ ...s, message_template: e.target.value }))} disabled={!editingSettings}
+                  style={{ width: "100%", padding: "12px", border: "1.5px solid rgba(26,95,191,0.12)", borderRadius: 12, fontFamily: font.body, fontSize: 13, color: "#0D1117", outline: "none", resize: "none", background: editingSettings ? "#fff" : "#F4F7FB", lineHeight: 1.6 }} />
+                <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.4)", marginTop: 6 }}>Use {"{name}"}, {"{business}"}, {"{link}"} as placeholders</div>
+              </div>
+            </div>
+
+            {/* Team / Employee Management */}
+            <div style={{ background: "#fff", borderRadius: 18, overflow: "hidden", border: "1px solid rgba(26,95,191,0.08)", marginBottom: 16, boxShadow: "0 2px 12px rgba(26,95,191,0.06)" }}>
+              <div style={{ padding: "10px 16px", background: "#F4F7FB", borderBottom: "1px solid rgba(26,95,191,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ fontFamily: font.body, fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.35)" }}>Team Members</div>
+                <button onClick={() => setAddingEmployee(true)} style={{ background: "none", border: "none", color: "#1A5FBF", fontFamily: font.body, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>+ Add</button>
+              </div>
+              <div style={{ padding: employees.length > 0 ? 0 : 16 }}>
+                {employees.length === 0 && !addingEmployee && (
+                  <div style={{ textAlign: "center", padding: "16px 0", fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.4)" }}>No employees added yet.</div>
+                )}
+                {employees.map(emp => (
+                  <div key={emp.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", borderBottom: "1px solid rgba(26,95,191,0.06)" }}>
+                    <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
+                      {emp.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: font.body, fontSize: 14, fontWeight: 700, color: "#0D1117" }}>{emp.name}</div>
+                      <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.4)" }}>{emp.email}</div>
+                    </div>
+                    <button onClick={() => removeEmployee(emp)} style={{ background: "none", border: "none", color: "#C0392B", cursor: "pointer", fontSize: 20, lineHeight: 1, padding: 4 }}>×</button>
+                  </div>
+                ))}
+                {addingEmployee && (
+                  <div style={{ padding: 16, borderTop: employees.length > 0 ? "1px solid rgba(26,95,191,0.06)" : "none" }}>
+                    <input placeholder="Employee name" value={newEmployee.name} onChange={e => setNewEmployee(n => ({ ...n, name: e.target.value }))}
+                      style={{ width: "100%", padding: "11px 14px", border: "1.5px solid rgba(26,95,191,0.15)", borderRadius: 10, fontFamily: font.body, fontSize: 13, color: "#0D1117", outline: "none", marginBottom: 10, background: "#F4F7FB" }} />
+                    <input placeholder="Email address" value={newEmployee.email} onChange={e => setNewEmployee(n => ({ ...n, email: e.target.value }))}
+                      style={{ width: "100%", padding: "11px 14px", border: "1.5px solid rgba(26,95,191,0.15)", borderRadius: 10, fontFamily: font.body, fontSize: 13, color: "#0D1117", outline: "none", marginBottom: 10, background: "#F4F7FB" }} />
+                    <input type="password" placeholder="Create password for them" value={newEmployee.password} onChange={e => setNewEmployee(n => ({ ...n, password: e.target.value }))}
+                      style={{ width: "100%", padding: "11px 14px", border: "1.5px solid rgba(26,95,191,0.15)", borderRadius: 10, fontFamily: font.body, fontSize: 13, color: "#0D1117", outline: "none", marginBottom: 12, background: "#F4F7FB" }} />
+                    <div style={{ display: "flex", gap: 10 }}>
+                      <button onClick={addEmployee} disabled={employeeSaving} style={{ flex: 1, padding: "11px", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", color: "#fff", border: "none", borderRadius: 10, fontFamily: font.body, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                        {employeeSaving ? "Adding…" : "Add Employee"}
+                      </button>
+                      <button onClick={() => { setAddingEmployee(false); setNewEmployee({ name: "", email: "", password: "" }); }} style={{ flex: 1, padding: "11px", background: "#F4F7FB", color: "rgba(13,17,23,0.5)", border: "1.5px solid rgba(26,95,191,0.12)", borderRadius: 10, fontFamily: font.body, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>Cancel</button>
+                    </div>
+                  </div>
                 )}
               </div>
-              {/* Employee Management — only for business owners, not employees */}
-              {!isEmployee && (
-                <div style={{ marginTop: 24, paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
-                  <div style={{ fontFamily: font.display, fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 4 }}>👥 Team</div>
-                  <p style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginBottom: 16, lineHeight: 1.6 }}>
-                    Add employees so they can send review requests and upload photos. They will not see analytics, history, or settings.
-                  </p>
-
-                  {/* Employee list */}
-                  {employees.length > 0 && (
-                    <div style={{ marginBottom: 16, display: "flex", flexDirection: "column", gap: 8 }}>
-                      {employees.map(emp => (
-                        <div key={emp.id} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 14px", background: C.surfaceHover, borderRadius: 10, border: `1px solid ${C.border}` }}>
-                          <div style={{ width: 34, height: 34, borderRadius: "50%", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#fff", flexShrink: 0 }}>
-                            {emp.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontFamily: font.display, fontSize: 14, fontWeight: 600, color: C.text }}>{emp.name}</div>
-                            <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{emp.email}</div>
-                          </div>
-                          <button onClick={() => removeEmployee(emp)}
-                            style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 18, lineHeight: 1, padding: "4px" }}>
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Add employee form */}
-                  {addingEmployee ? (
-                    <div style={{ background: C.surfaceHover, borderRadius: 12, padding: 16, border: `1px solid ${C.border}` }}>
-                      <div style={{ marginBottom: 12 }}>
-                        <Label>Employee Name</Label>
-                        <input style={inputStyle} placeholder="e.g. John Smith" value={newEmployee.name} onChange={e => setNewEmployee(n => ({ ...n, name: e.target.value }))} />
-                      </div>
-                      <div style={{ marginBottom: 12 }}>
-                        <Label>Email Address</Label>
-                        <input style={inputStyle} placeholder="employee@email.com" value={newEmployee.email} onChange={e => setNewEmployee(n => ({ ...n, email: e.target.value }))} />
-                      </div>
-                      <div style={{ marginBottom: 16 }}>
-                        <Label>Password</Label>
-                        <input type="password" style={inputStyle} placeholder="Create a password for them" value={newEmployee.password} onChange={e => setNewEmployee(n => ({ ...n, password: e.target.value }))} />
-                        <div style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, marginTop: 4 }}>Share this password with your employee directly. No email will be sent.</div>
-                      </div>
-                      <div style={{ display: "flex", gap: 10 }}>
-                        <button onClick={addEmployee} disabled={employeeSaving} style={{ ...btnStyle, flex: 1 }}>
-                          {employeeSaving ? "Adding…" : "Add Employee"}
-                        </button>
-                        <button onClick={() => { setAddingEmployee(false); setNewEmployee({ name: "", email: "", password: "" }); }} style={{ ...ghostBtnStyle, flex: 1 }}>Cancel</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button onClick={() => setAddingEmployee(true)} style={{ ...ghostBtnStyle, width: "100%", textAlign: "center" }}>
-                      + Add Employee
-                    </button>
-                  )}
-                </div>
-              )}
             </div>
+
           </div>
         )}
 
-        {/* ANALYTICS */}
-        {tab === "analytics" && (
-          features.analytics ? (
-            <AnalyticsTab log={log} businessName={settings.name} />
-          ) : (
-            <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 24px" }}>
-              <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.4 }}>📊</div>
-              <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text, marginBottom: 8 }}>Analytics Not Enabled</div>
-              <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, lineHeight: 1.6, marginBottom: 24 }}>The analytics dashboard is not included in your current plan. Contact your account manager to unlock this feature.</div>
-              <button style={{ ...btnStyle, width: "auto", padding: "12px 28px" }}>Contact Your Manager</button>
-            </div>
-          )
-        )}
-
-      </div>
-
-      {/* Bottom Nav */}
-      <div style={{ background: C.surface, borderTop: `1px solid ${C.border}`, display: "flex", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom)" }}>
-        {navItems.map(item => (
-          <button key={item.id} onClick={() => { setTab(item.id); if (item.id === "photos") loadPendingPhotos(); }}
-            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 0 8px", background: "none", border: "none", cursor: "pointer", gap: 4, transition: "all 0.15s", position: "relative", opacity: item.locked ? 0.4 : 1 }}>
-            {item.locked && <span style={{ position: "absolute", top: 4, right: "18%", fontSize: 8, color: C.textMuted }}>🔒</span>}
-            <div style={{ position: "relative", display: "inline-block" }}>
-              <span style={{ fontSize: 20, lineHeight: 1 }}>{item.icon}</span>
-              {item.id === "photos" && pendingPhotoCount > 0 && (
-                <div style={{ position: "absolute", top: -6, right: -8, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 10, fontWeight: "bold", border: "2px solid #0D1117" }}>
-                  {pendingPhotoCount > 9 ? "9+" : pendingPhotoCount}
-                </div>
-              )}
-            </div>
-            <span style={{ fontFamily: font.body, fontSize: 11, fontWeight: tab === item.id ? 700 : 400, color: tab === item.id ? C.gold : C.textMuted, letterSpacing: 0.5 }}>{item.label}</span>
-            {tab === item.id && <div style={{ width: 4, height: 4, borderRadius: "50%", background: C.gold, marginTop: 2 }} />}
-          </button>
-        ))}
       </div>
 
       {/* Floating Chat Bubble */}
       <button onClick={() => { setChatOpen(true); markManagerMessagesRead(); }}
-        style={{ position: "fixed", bottom: 90, right: 20, width: 56, height: 56, borderRadius: "50%", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 4px 20px rgba(26,95,191,0.45)", zIndex: 50, transition: "transform 0.2s" }}
+        style={{ position: "fixed", bottom: 90, right: 20, width: 54, height: 54, borderRadius: "50%", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 6px 24px rgba(26,95,191,0.5)", zIndex: 50, transition: "transform 0.2s" }}
         onMouseEnter={e => e.currentTarget.style.transform = "scale(1.08)"}
         onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}>
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
           <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" fill="white"/>
         </svg>
         {unreadFromManager > 0 && (
-          <div style={{ position: "absolute", top: -4, right: -4, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 11, fontWeight: "bold", border: "2px solid #F4F7FB" }}>
+          <div style={{ position: "absolute", top: -4, right: -4, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 20, height: 20, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Courier New', monospace", fontSize: 11, fontWeight: "bold", border: "2px solid #F4F7FB" }}>
             {unreadFromManager > 9 ? "9+" : unreadFromManager}
           </div>
         )}
@@ -2106,33 +2102,33 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
       {/* Chat Modal */}
       {chatOpen && (
         <div style={{ position: "fixed", inset: 0, zIndex: 200, display: "flex", flexDirection: "column" }}>
-          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.4)" }} onClick={() => setChatOpen(false)} />
-          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "#fff", borderRadius: "20px 20px 0 0", display: "flex", flexDirection: "column", maxHeight: "80vh", boxShadow: "0 -8px 40px rgba(0,0,0,0.2)" }}>
-
+          <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.5)", backdropFilter: "blur(4px)" }} onClick={() => setChatOpen(false)} />
+          <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "#fff", borderRadius: "24px 24px 0 0", display: "flex", flexDirection: "column", maxHeight: "82vh", boxShadow: "0 -12px 48px rgba(0,0,0,0.25)" }}>
             {/* Chat header */}
-            <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid #E5EAF2", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-              <div style={{ width: 38, height: 38, borderRadius: "50%", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>👤</div>
+            <div style={{ padding: "16px 20px 12px", borderBottom: "1px solid rgba(26,95,191,0.08)", display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, flexShrink: 0 }}>👤</div>
               <div style={{ flex: 1 }}>
-                <div style={{ fontFamily: font.display, fontSize: 15, fontWeight: 700, color: "#0D1117" }}>Your Account Manager</div>
-                <div style={{ fontFamily: font.body, fontSize: 12, color: "#6B7A99" }}>Talk with your account manager</div>
+                <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 700, color: "#0D1117" }}>Your Account Manager</div>
+                <div style={{ fontFamily: font.body, fontSize: 12, color: "#1A8C4E", display: "flex", alignItems: "center", gap: 4 }}>
+                  <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#1A8C4E" }} /> Online
+                </div>
               </div>
-              <button onClick={() => setChatOpen(false)} style={{ background: "none", border: "none", fontSize: 22, cursor: "pointer", color: "#9DADC4", lineHeight: 1 }}>×</button>
+              <button onClick={() => setChatOpen(false)} style={{ background: "none", border: "none", fontSize: 24, cursor: "pointer", color: "rgba(13,17,23,0.3)", lineHeight: 1 }}>×</button>
             </div>
-
             {/* Messages */}
-            <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ flex: 1, overflowY: "auto", padding: "16px 16px 8px", display: "flex", flexDirection: "column", gap: 10, background: "#F4F7FB" }}>
               {chatMessages.length === 0 && (
-                <div style={{ textAlign: "center", padding: "40px 20px", color: "#9DADC4", fontFamily: font.body, fontSize: 14 }}>
-                  No messages yet. Send a message to your account manager!
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "rgba(13,17,23,0.35)", fontFamily: font.body, fontSize: 14 }}>
+                  Send a message to your account manager!
                 </div>
               )}
               {chatMessages.map((msg, i) => {
                 const isOwner = msg.sender_role === "owner";
                 return (
                   <div key={i} style={{ display: "flex", justifyContent: isOwner ? "flex-end" : "flex-start" }}>
-                    <div style={{ maxWidth: "75%", padding: "10px 14px", borderRadius: isOwner ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isOwner ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : "#F0F4FA", color: isOwner ? "#fff" : "#0D1117", fontFamily: font.body, fontSize: 14, lineHeight: 1.5 }}>
+                    <div style={{ maxWidth: "76%", padding: "10px 14px", borderRadius: isOwner ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isOwner ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : "#fff", color: isOwner ? "#fff" : "#0D1117", fontFamily: font.body, fontSize: 14, lineHeight: 1.55, boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
                       {msg.message}
-                      <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, textAlign: isOwner ? "right" : "left" }}>
+                      <div style={{ fontSize: 10, opacity: 0.5, marginTop: 4, textAlign: isOwner ? "right" : "left" }}>
                         {new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                       </div>
                     </div>
@@ -2140,26 +2136,42 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                 );
               })}
             </div>
-
             {/* Input */}
-            <div style={{ padding: "12px 16px 20px", borderTop: "1px solid #E5EAF2", display: "flex", gap: 10, flexShrink: 0 }}>
-              <input
-                value={chatInput}
-                onChange={e => setChatInput(e.target.value)}
+            <div style={{ padding: "12px 16px 24px", borderTop: "1px solid rgba(26,95,191,0.08)", display: "flex", gap: 10, flexShrink: 0, background: "#fff" }}>
+              <input value={chatInput} onChange={e => setChatInput(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendChatMessage()}
                 placeholder="Message your account manager..."
-                style={{ flex: 1, padding: "11px 16px", border: "1px solid #D6E2F0", borderRadius: 22, fontFamily: font.body, fontSize: 14, outline: "none", background: "#F4F7FB", color: "#0D1117" }}
-              />
+                style={{ flex: 1, padding: "12px 16px", border: "1.5px solid rgba(26,95,191,0.12)", borderRadius: 22, fontFamily: font.body, fontSize: 14, outline: "none", background: "#F4F7FB", color: "#0D1117" }} />
               <button onClick={sendChatMessage} disabled={chatSending || !chatInput.trim()}
-                style={{ width: 42, height: 42, borderRadius: "50%", background: chatInput.trim() ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : "#D6E2F0", border: "none", cursor: chatInput.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.2s" }}>
+                style={{ width: 44, height: 44, borderRadius: "50%", background: chatInput.trim() ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : "#D6E2F0", border: "none", cursor: chatInput.trim() ? "pointer" : "default", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.2s", boxShadow: chatInput.trim() ? "0 4px 12px rgba(26,95,191,0.4)" : "none" }}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                  <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Bottom Nav */}
+      <div style={{ background: "#fff", borderTop: "1px solid rgba(26,95,191,0.08)", display: "flex", flexShrink: 0, paddingBottom: "env(safe-area-inset-bottom)", boxShadow: "0 -4px 20px rgba(0,0,0,0.06)" }}>
+        {navItems.map(item => (
+          <button key={item.id} onClick={() => { if (!item.locked) { setTab(item.id); if (item.id === "photos") loadPendingPhotos(); } }}
+            style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", padding: "10px 0 8px", background: "none", border: "none", cursor: item.locked ? "not-allowed" : "pointer", gap: 3, position: "relative", opacity: item.locked ? 0.35 : 1, transition: "opacity 0.15s" }}>
+            {item.locked && <span style={{ position: "absolute", top: 4, right: "20%", fontSize: 8 }}>🔒</span>}
+            <div style={{ position: "relative", display: "inline-block" }}>
+              <span style={{ fontSize: 22, lineHeight: 1 }}>{item.icon}</span>
+              {item.id === "photos" && pendingPhotoCount > 0 && (
+                <div style={{ position: "absolute", top: -5, right: -8, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 17, height: 17, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Courier New', monospace", fontSize: 9, fontWeight: "bold", border: "2px solid #fff" }}>
+                  {pendingPhotoCount > 9 ? "9+" : pendingPhotoCount}
+                </div>
+              )}
+            </div>
+            <span style={{ fontFamily: font.body, fontSize: 10, fontWeight: tab === item.id ? 700 : 500, color: tab === item.id ? "#1A5FBF" : "rgba(13,17,23,0.35)", letterSpacing: 0.3 }}>{item.label}</span>
+            {tab === item.id && <div style={{ width: 4, height: 4, borderRadius: "50%", background: "#1A5FBF" }} />}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
