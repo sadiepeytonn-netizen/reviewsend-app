@@ -914,38 +914,6 @@ function MarketingDashboard({ data, onSignOut }) {
               </div>
             )}
 
-            {selectedBizTab === "messages" && (
-              <div style={{ padding: "4px 0 16px" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 300, maxHeight: 480, overflowY: "auto", marginBottom: 16 }}>
-                  {managerChatMessages.filter(m => m.business_id === selectedBusiness.id).length === 0 && (
-                    <div style={{ textAlign: "center", padding: "40px 20px", color: C.textMuted, fontFamily: font.body, fontSize: 14 }}>No messages yet. Send a message to start the conversation.</div>
-                  )}
-                  {managerChatMessages.filter(m => m.business_id === selectedBusiness.id).map((msg, i) => {
-                    const isManager = msg.sender_role === "manager";
-                    return (
-                      <div key={i} style={{ display: "flex", justifyContent: isManager ? "flex-end" : "flex-start" }}>
-                        <div style={{ maxWidth: "70%", padding: "10px 14px", borderRadius: isManager ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isManager ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : "#F0F4FA", color: isManager ? "#fff" : C.text, fontFamily: font.body, fontSize: 14, lineHeight: 1.5 }}>
-                          {!isManager && <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, marginBottom: 4 }}>{msg.sender_name || selectedBusiness.name}</div>}
-                          {msg.message}
-                          <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, textAlign: isManager ? "right" : "left" }}>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <input value={managerChatInput} onChange={e => setManagerChatInput(e.target.value)}
-                    onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendManagerMessage(selectedBusiness.id)}
-                    placeholder={"Message " + selectedBusiness.name + "..."}
-                    style={{ flex: 1, padding: "11px 16px", border: `1px solid ${C.border}`, borderRadius: 22, fontFamily: font.body, fontSize: 14, outline: "none", background: C.bg, color: C.text }} />
-                  <button onClick={() => sendManagerMessage(selectedBusiness.id)} disabled={managerChatSending || !managerChatInput.trim()}
-                    style={{ padding: "0 20px", borderRadius: 22, background: managerChatInput.trim() ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : C.border, border: "none", cursor: managerChatInput.trim() ? "pointer" : "default", color: "#fff", fontFamily: font.body, fontSize: 14, fontWeight: 600 }}>
-                    Send
-                  </button>
-                </div>
-              </div>
-            )}
-
             {selectedBizTab === "analytics" && (
               <AnalyticsTab
                 log={messages.filter(m => m.business_id === selectedBusiness.id)}
