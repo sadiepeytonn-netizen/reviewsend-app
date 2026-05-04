@@ -1610,6 +1610,105 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   const chatBottomRef = useState(null);
   const [historySearch, setHistorySearch] = useState("");
 
+  // Google Business Profile state
+  const [googleConnected, setGoogleConnected] = useState(!!settings.google_access_token);
+  const [googleData, setGoogleData] = useState(null);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleError, setGoogleError] = useState("");
+
+  const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+  const REDIRECT_URI = "https://app.reviewsend.io";
+  const GOOGLE_SCOPES = [
+    "https://www.googleapis.com/auth/business.manage",
+  ].join(" ");
+
+  const connectGoogle = () => {
+    const params = new URLSearchParams({
+      client_id: GOOGLE_CLIENT_ID,
+      redirect_uri: REDIRECT_URI,
+      response_type: "code",
+      scope: GOOGLE_SCOPES,
+      access_type: "offline",
+      prompt: "consent",
+      state: data.id,
+    });
+    window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+  };
+
+  const disconnectGoogle = async () => {
+    await supabase.from("businesses").update({
+      google_access_token: null, google_refresh_token: null,
+      google_token_expiry: null, google_account_id: null, google_location_id: null,
+    }).eq("id", data.id);
+    setGoogleConnected(false);
+    setGoogleData(null);
+    setSettings(s => ({ ...s, google_access_token: null }));
+  };
+
+  const fetchGoogleData = async (accessToken) => {
+    setGoogleLoading(true);
+    setGoogleError("");
+    try {
+      const res = await fetch("https://reviewsend-server-production.up.railway.app/google/data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ access_token: accessToken }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        setGoogleData(result);
+        setGoogleConnected(true);
+      } else {
+        setGoogleError(result.error || "Could not fetch Google data.");
+      }
+    } catch (err) {
+      setGoogleError("Network error fetching Google data.");
+    }
+    setGoogleLoading(false);
+  };
+
+  // Handle OAuth callback
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+    const state = params.get("state");
+    if (code && state === data.id) {
+      // Exchange code for tokens
+      (async () => {
+        setGoogleLoading(true);
+        try {
+          const res = await fetch("https://reviewsend-server-production.up.railway.app/google/token", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ code, redirectUri: REDIRECT_URI }),
+          });
+          const tokens = await res.json();
+          if (tokens.success) {
+            const expiry = Date.now() + (tokens.expires_in * 1000);
+            await supabase.from("businesses").update({
+              google_access_token: tokens.access_token,
+              google_refresh_token: tokens.refresh_token || null,
+              google_token_expiry: expiry,
+            }).eq("id", data.id);
+            setSettings(s => ({ ...s, google_access_token: tokens.access_token }));
+            // Clear the URL params
+            window.history.replaceState({}, "", window.location.pathname);
+            await fetchGoogleData(tokens.access_token);
+          } else {
+            setGoogleError("Failed to connect Google: " + tokens.error);
+            window.history.replaceState({}, "", window.location.pathname);
+          }
+        } catch (err) {
+          setGoogleError("Error connecting Google account.");
+        }
+        setGoogleLoading(false);
+      })();
+    } else if (settings.google_access_token) {
+      // Already connected — load data
+      fetchGoogleData(settings.google_access_token);
+    }
+  }, []);
+
   const loadChat = async () => {
     const { data: msgs } = await supabase.from("chat_messages")
       .select("*").eq("business_id", data.id).order("created_at", { ascending: true });
@@ -1953,6 +2052,30 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
         {tab === "analytics" && (
           features.analytics ? (
             <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "24px 20px 20px" }}>
+
+              {/* Google Rating Hero — shown when connected */}
+              {googleConnected && googleData && (
+                <div style={{ background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", borderRadius: 20, padding: 20, marginBottom: 14, position: "relative", overflow: "hidden" }}>
+                  <div style={{ position: "absolute", top: -30, right: -30, width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.05)" }} />
+                  <div style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>Google Business Profile</div>
+                  <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 4 }}>{googleData.location_name}</div>
+                  <div style={{ fontFamily: font.body, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Connected ✓</div>
+                </div>
+              )}
+
+              {/* Connect Google prompt — shown when not connected */}
+              {!googleConnected && (
+                <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 14, border: "1px solid rgba(26,95,191,0.1)", display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "#EEF3FA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>📊</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, color: "#0D1117", marginBottom: 2 }}>Connect Google for Live Analytics</div>
+                    <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.45)" }}>See your real star rating and reviews</div>
+                  </div>
+                  <button onClick={() => setTab("settings")} style={{ padding: "8px 14px", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", color: "#fff", border: "none", borderRadius: 10, fontFamily: font.body, fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap" }}>Connect →</button>
+                </div>
+              )}
+
+              {/* Internal stats */}
               <AnalyticsTab log={msgLog} businessName={settings.name} photos={[]} socialLinks={settings.social_links || {}} onNavigate={setTab} embedded={true} />
             </div>
           ) : (
@@ -2047,6 +2170,44 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                 <textarea rows={4} value={editingSettings ? draftSettings.message_template : settings.message_template} onChange={e => setDraftSettings(s => ({ ...s, message_template: e.target.value }))} disabled={!editingSettings}
                   style={{ width: "100%", padding: "12px", border: "1.5px solid rgba(26,95,191,0.12)", borderRadius: 12, fontFamily: font.body, fontSize: 13, color: "#0D1117", outline: "none", resize: "none", background: editingSettings ? "#fff" : "#F4F7FB", lineHeight: 1.6 }} />
                 <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.4)", marginTop: 6 }}>Use {"{name}"}, {"{business}"}, {"{link}"} as placeholders</div>
+              </div>
+            </div>
+
+            {/* Google Business Profile Connect */}
+            <div style={{ background: "#fff", borderRadius: 18, overflow: "hidden", border: "1px solid rgba(26,95,191,0.08)", marginBottom: 16, boxShadow: "0 2px 12px rgba(26,95,191,0.06)" }}>
+              <div style={{ padding: "10px 16px", background: "#F4F7FB", borderBottom: "1px solid rgba(26,95,191,0.08)", display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 20, height: 20, borderRadius: 4, background: "#4A90D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#fff" }}>G</div>
+                <div style={{ fontFamily: font.body, fontSize: 9, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.35)" }}>Google Business Profile</div>
+              </div>
+              <div style={{ padding: 16 }}>
+                {googleLoading ? (
+                  <div style={{ textAlign: "center", padding: "12px 0", fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.4)" }}>Connecting to Google...</div>
+                ) : googleConnected && googleData ? (
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: "50%", background: "#DCFCE7", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>✓</div>
+                      <div>
+                        <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, color: "#0D1117" }}>{googleData.location_name}</div>
+                        <div style={{ fontFamily: font.body, fontSize: 11, color: "#1A8C4E", fontWeight: 600 }}>Connected to Google Business Profile</div>
+                      </div>
+                    </div>
+                    <button onClick={disconnectGoogle} style={{ width: "100%", padding: "10px", background: "#FEF2F2", color: "#C0392B", border: "1px solid #FECACA", borderRadius: 10, fontFamily: font.body, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+                      Disconnect Google
+                    </button>
+                  </div>
+                ) : (
+                  <div>
+                    <p style={{ fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.5)", lineHeight: 1.6, marginBottom: 14 }}>
+                      Connect your Google Business Profile to see your live star rating, review count, and recent reviews in your Analytics tab.
+                    </p>
+                    {googleError && <p style={{ fontFamily: font.body, fontSize: 12, color: "#C0392B", marginBottom: 10 }}>{googleError}</p>}
+                    <button onClick={connectGoogle} style={{ width: "100%", padding: "13px", background: "#fff", border: "2px solid rgba(26,95,191,0.2)", borderRadius: 12, fontFamily: font.body, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: 10 }}>
+                      <div style={{ width: 24, height: 24, borderRadius: 6, background: "#4A90D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: "#fff" }}>G</div>
+                      <span style={{ color: "#0D1117" }}>Connect with Google</span>
+                    </button>
+                    <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.35)", textAlign: "center", marginTop: 8 }}>You will be redirected to Google to authorize access</div>
+                  </div>
+                )}
               </div>
             </div>
 
