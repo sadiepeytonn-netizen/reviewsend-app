@@ -61,6 +61,18 @@ export default function App() {
   const [setPasswordSuccess, setSetPasswordSuccess] = useState(false);
 
   useEffect(() => {
+    // Check if this is a Google OAuth callback — has ?code= in URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const oauthCode = urlParams.get("code");
+    const oauthState = urlParams.get("state");
+    if (oauthCode && oauthState) {
+      // Store in sessionStorage so BusinessApp can pick it up after login
+      sessionStorage.setItem("google_oauth_code", oauthCode);
+      sessionStorage.setItem("google_oauth_state", oauthState);
+      // Clear URL params so they don't interfere
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
     // Check if this is a password recovery link click
     const hash = window.location.hash;
     if (hash && hash.includes("type=recovery")) {
@@ -1669,10 +1681,11 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
 
   // Handle OAuth callback
   useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const code = params.get("code");
-    const state = params.get("state");
+    const code = sessionStorage.getItem("google_oauth_code");
+    const state = sessionStorage.getItem("google_oauth_state");
     if (code && state === data.id) {
+      sessionStorage.removeItem("google_oauth_code");
+      sessionStorage.removeItem("google_oauth_state");
       // Exchange code for tokens
       (async () => {
         setGoogleLoading(true);
