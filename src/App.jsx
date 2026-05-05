@@ -1994,12 +1994,12 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
             </div>
 
             {/* Quick stats row */}
-            {msgLog.length > 0 && (
+            {log.length > 0 && (
               <div style={{ display: "flex", gap: 10 }}>
                 {[
-                  { num: msgLog.length, label: "Total Sent", color: "#1A5FBF" },
-                  { num: msgLog.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length, label: "This Month", color: "#1A8C4E" },
-                  { num: msgLog.filter(m => m.platform === "Google").length, label: "Google", color: "#4A90D9" },
+                  { num: log.length, label: "Total Sent", color: "#1A5FBF" },
+                  { num: log.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length, label: "This Month", color: "#1A8C4E" },
+                  { num: log.filter(m => m.platform === "Google").length, label: "Google", color: "#4A90D9" },
                 ].map((s, i) => (
                   <div key={i} style={{ flex: 1, background: "#fff", borderRadius: 14, padding: "12px 10px", textAlign: "center", border: "1px solid rgba(26,95,191,0.08)", boxShadow: "0 2px 8px rgba(26,95,191,0.04)" }}>
                     <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.num}</div>
@@ -2041,7 +2041,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
               <input value={historySearch || ""} onChange={e => setHistorySearch && setHistorySearch(e.target.value)} placeholder="Search by name..." style={{ flex: 1, border: "none", outline: "none", fontFamily: font.body, fontSize: 13, color: "#0D1117", background: "transparent" }} />
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-              {msgLog.filter(m => !historySearch || m.customer_name?.toLowerCase().includes(historySearch.toLowerCase()) || m.customer_phone?.includes(historySearch)).map((msg, i) => (
+              {log.filter(m => !historySearch || m.customer_name?.toLowerCase().includes(historySearch.toLowerCase()) || m.customer_phone?.includes(historySearch)).map((msg, i) => (
                 <div key={i} style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", display: "flex", alignItems: "center", gap: 12, border: "1px solid rgba(26,95,191,0.08)", boxShadow: "0 2px 8px rgba(26,95,191,0.04)" }}>
                   <div style={{ width: 40, height: 40, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #B8CCE8)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.display, fontSize: 16, fontWeight: 700, color: "#1A5FBF", flexShrink: 0 }}>
                     {msg.customer_name?.[0]?.toUpperCase() || "?"}
@@ -2056,7 +2056,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                   </div>
                 </div>
               ))}
-              {msgLog.length === 0 && <div style={{ textAlign: "center", padding: 40, fontFamily: font.body, fontSize: 15, color: "rgba(13,17,23,0.4)" }}>No requests sent yet.</div>}
+              {log.length === 0 && <div style={{ textAlign: "center", padding: 40, fontFamily: font.body, fontSize: 15, color: "rgba(13,17,23,0.4)" }}>No requests sent yet.</div>}
             </div>
           </div>
         )}
@@ -2089,7 +2089,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
               )}
 
               {/* Internal stats */}
-              <AnalyticsTab log={msgLog} businessName={settings.name} photos={[]} socialLinks={settings.social_links || {}} onNavigate={setTab} embedded={true} />
+              <AnalyticsTab log={log} businessName={settings.name} photos={[]} socialLinks={settings.social_links || {}} onNavigate={setTab} embedded={true} />
             </div>
           ) : (
             <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 32px" }}>
