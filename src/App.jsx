@@ -128,7 +128,15 @@ function ForgotPasswordModal({ onClose }) {
     if (!email.trim()) return;
     setStatus("loading");
     setErrorMsg("");
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
+    const cleanEmail = email.trim().toLowerCase();
+    try {
+      await fetch(`${SERVER}/create-user`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: cleanEmail }),
+      });
+    } catch (_) {}
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
       redirectTo: window.location.origin,
     });
     if (error) { setStatus("error"); setErrorMsg("Something went wrong. Please try again."); }
@@ -525,9 +533,18 @@ function SuperAdminDashboard({ onSignOut }) {
 
   const addCompany = async () => {
     setSaving(true);
-    await supabase.auth.admin?.createUser({ email: newCompany.email, password: newCompany.password });
-    const { error } = await supabase.from("marketing_companies").insert([{ name: newCompany.name, email: newCompany.email, revenue_share: newCompany.revenue_share }]);
-    if (!error) { setShowAddCompany(false); setNewCompany({ name: "", email: "", password: "", revenue_share: 20 }); loadData(); }
+    const cleanEmail = newCompany.email.trim().toLowerCase();
+    await createAuthUser(cleanEmail);
+    const { error } = await supabase.from("marketing_companies").insert([{ name: newCompany.name, email: cleanEmail, revenue_share: newCompany.revenue_share }]);
+    if (!error) {
+      await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: "https://app.reviewsend.io" });
+      setShowAddCompany(false);
+      setNewCompany({ name: "", email: "", password: "", revenue_share: 20 });
+      loadData();
+      alert("Marketing company created! A password setup email has been sent to " + cleanEmail);
+    } else {
+      alert("Error creating company: " + error.message);
+    }
     setSaving(false);
   };
 
@@ -609,7 +626,6 @@ function SuperAdminDashboard({ onSignOut }) {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
                   <div><Label>Company Name</Label><input style={inputStyle} value={newCompany.name} onChange={e => setNewCompany(d => ({...d, name: e.target.value}))} placeholder="XYZ Marketing" /></div>
                   <div><Label>Email</Label><input style={inputStyle} value={newCompany.email} onChange={e => setNewCompany(d => ({...d, email: e.target.value}))} placeholder="contact@xyzmarketing.com" /></div>
-                  <div><Label>Password</Label><input type="password" style={inputStyle} value={newCompany.password} onChange={e => setNewCompany(d => ({...d, password: e.target.value}))} placeholder="Create a password" /></div>
                   <div><Label>Revenue Share %</Label><input type="number" style={inputStyle} value={newCompany.revenue_share} onChange={e => setNewCompany(d => ({...d, revenue_share: e.target.value}))} placeholder="20" /></div>
                 </div>
                 <div style={{ display: "flex", gap: 12 }}>
