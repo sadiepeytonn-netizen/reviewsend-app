@@ -827,15 +827,28 @@ function MarketingDashboard({ data, onSignOut }) {
       alert("Business name does not match. Please type the name exactly as shown.");
       return;
     }
-    await supabase.from("messages").delete().eq("business_id", businessToDelete.id);
-    await supabase.from("photos").delete().eq("business_id", businessToDelete.id);
-    await supabase.from("bulk_sends").delete().eq("business_id", businessToDelete.id);
-    await supabase.from("employees").delete().eq("business_id", businessToDelete.id);
-    await supabase.from("businesses").delete().eq("id", businessToDelete.id);
-    if (businessToDelete.email) await deleteAuthUser(businessToDelete.email);
-    setShowDeleteModal(false); setDeleteConfirmText(""); setBusinessToDelete(null);
-    setSelectedBusiness(null); setSelectedBizTab("analytics");
-    loadData();
+    try {
+      const id = businessToDelete.id;
+      const email = businessToDelete.email;
+      const { error: msgErr } = await supabase.from("messages").delete().eq("business_id", id);
+      if (msgErr) console.warn("messages delete:", msgErr.message);
+      const { error: photoErr } = await supabase.from("photos").delete().eq("business_id", id);
+      if (photoErr) console.warn("photos delete:", photoErr.message);
+      const { error: bulkErr } = await supabase.from("bulk_sends").delete().eq("business_id", id);
+      if (bulkErr) console.warn("bulk_sends delete:", bulkErr.message);
+      const { error: empErr } = await supabase.from("employees").delete().eq("business_id", id);
+      if (empErr) console.warn("employees delete:", empErr.message);
+      const { error: chatErr } = await supabase.from("chat_messages").delete().eq("business_id", id);
+      if (chatErr) console.warn("chat_messages delete:", chatErr.message);
+      const { error: bizErr } = await supabase.from("businesses").delete().eq("id", id);
+      if (bizErr) { alert("Failed to delete client: " + bizErr.message); return; }
+      if (email) await deleteAuthUser(email);
+      setShowDeleteModal(false); setDeleteConfirmText(""); setBusinessToDelete(null);
+      setSelectedBusiness(null); setSelectedBizTab("analytics");
+      loadData();
+    } catch (err) {
+      alert("Error deleting client: " + err.message);
+    }
   };
 
   const loadManagerChat = async (bizId) => {
