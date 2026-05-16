@@ -128,15 +128,7 @@ function ForgotPasswordModal({ onClose }) {
     if (!email.trim()) return;
     setStatus("loading");
     setErrorMsg("");
-    const cleanEmail = email.trim().toLowerCase();
-    try {
-      await fetch(`${SERVER}/create-user`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail }),
-      });
-    } catch (_) {}
-    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
       redirectTo: window.location.origin,
     });
     if (error) { setStatus("error"); setErrorMsg("Something went wrong. Please try again."); }
@@ -533,18 +525,9 @@ function SuperAdminDashboard({ onSignOut }) {
 
   const addCompany = async () => {
     setSaving(true);
-    const cleanEmail = newCompany.email.trim().toLowerCase();
-    await createAuthUser(cleanEmail);
-    const { error } = await supabase.from("marketing_companies").insert([{ name: newCompany.name, email: cleanEmail, revenue_share: newCompany.revenue_share }]);
-    if (!error) {
-      await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: "https://app.reviewsend.io" });
-      setShowAddCompany(false);
-      setNewCompany({ name: "", email: "", password: "", revenue_share: 20 });
-      loadData();
-      alert("Marketing company created! A password setup email has been sent to " + cleanEmail);
-    } else {
-      alert("Error creating company: " + error.message);
-    }
+    await supabase.auth.admin?.createUser({ email: newCompany.email, password: newCompany.password });
+    const { error } = await supabase.from("marketing_companies").insert([{ name: newCompany.name, email: newCompany.email, revenue_share: newCompany.revenue_share }]);
+    if (!error) { setShowAddCompany(false); setNewCompany({ name: "", email: "", password: "", revenue_share: 20 }); loadData(); }
     setSaving(false);
   };
 
@@ -626,6 +609,7 @@ function SuperAdminDashboard({ onSignOut }) {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
                   <div><Label>Company Name</Label><input style={inputStyle} value={newCompany.name} onChange={e => setNewCompany(d => ({...d, name: e.target.value}))} placeholder="XYZ Marketing" /></div>
                   <div><Label>Email</Label><input style={inputStyle} value={newCompany.email} onChange={e => setNewCompany(d => ({...d, email: e.target.value}))} placeholder="contact@xyzmarketing.com" /></div>
+                  <div><Label>Password</Label><input type="password" style={inputStyle} value={newCompany.password} onChange={e => setNewCompany(d => ({...d, password: e.target.value}))} placeholder="Create a password" /></div>
                   <div><Label>Revenue Share %</Label><input type="number" style={inputStyle} value={newCompany.revenue_share} onChange={e => setNewCompany(d => ({...d, revenue_share: e.target.value}))} placeholder="20" /></div>
                 </div>
                 <div style={{ display: "flex", gap: 12 }}>
@@ -827,28 +811,15 @@ function MarketingDashboard({ data, onSignOut }) {
       alert("Business name does not match. Please type the name exactly as shown.");
       return;
     }
-    try {
-      const id = businessToDelete.id;
-      const email = businessToDelete.email;
-      const { error: msgErr } = await supabase.from("messages").delete().eq("business_id", id);
-      if (msgErr) console.warn("messages delete:", msgErr.message);
-      const { error: photoErr } = await supabase.from("photos").delete().eq("business_id", id);
-      if (photoErr) console.warn("photos delete:", photoErr.message);
-      const { error: bulkErr } = await supabase.from("bulk_sends").delete().eq("business_id", id);
-      if (bulkErr) console.warn("bulk_sends delete:", bulkErr.message);
-      const { error: empErr } = await supabase.from("employees").delete().eq("business_id", id);
-      if (empErr) console.warn("employees delete:", empErr.message);
-      const { error: chatErr } = await supabase.from("chat_messages").delete().eq("business_id", id);
-      if (chatErr) console.warn("chat_messages delete:", chatErr.message);
-      const { error: bizErr } = await supabase.from("businesses").delete().eq("id", id);
-      if (bizErr) { alert("Failed to delete client: " + bizErr.message); return; }
-      if (email) await deleteAuthUser(email);
-      setShowDeleteModal(false); setDeleteConfirmText(""); setBusinessToDelete(null);
-      setSelectedBusiness(null); setSelectedBizTab("analytics");
-      loadData();
-    } catch (err) {
-      alert("Error deleting client: " + err.message);
-    }
+    await supabase.from("messages").delete().eq("business_id", businessToDelete.id);
+    await supabase.from("photos").delete().eq("business_id", businessToDelete.id);
+    await supabase.from("bulk_sends").delete().eq("business_id", businessToDelete.id);
+    await supabase.from("employees").delete().eq("business_id", businessToDelete.id);
+    await supabase.from("businesses").delete().eq("id", businessToDelete.id);
+    if (businessToDelete.email) await deleteAuthUser(businessToDelete.email);
+    setShowDeleteModal(false); setDeleteConfirmText(""); setBusinessToDelete(null);
+    setSelectedBusiness(null); setSelectedBizTab("analytics");
+    loadData();
   };
 
   const loadManagerChat = async (bizId) => {
@@ -1866,24 +1837,16 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
         {tab === "analytics" && (
           features.analytics ? (
             <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "24px 20px 20px" }}>
-              {googleConnected && googleData && (
-                <div style={{ background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", borderRadius: 20, padding: 20, marginBottom: 14, position: "relative", overflow: "hidden" }}>
-                  <div style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>Google Business Profile</div>
-                  <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 4 }}>{googleData.location_name}</div>
-                  <div style={{ fontFamily: font.body, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Connected ✓</div>
-                </div>
-              )}
-              {!googleConnected && (
-                <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 14, border: "1px solid rgba(26,95,191,0.1)", display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 10, background: "#EEF3FA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>📊</div>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, color: "#0D1117", marginBottom: 2 }}>Connect Google for Live Analytics</div>
-                    <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.45)" }}>See your real star rating and reviews</div>
-                  </div>
-                  <button onClick={() => setTab("settings")} style={{ padding: "8px 14px", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", color: "#fff", border: "none", borderRadius: 10, fontFamily: font.body, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Connect →</button>
-                </div>
-              )}
-              <AnalyticsTab log={log} businessName={settings.name} photos={[]} socialLinks={settings.social_links || {}} onNavigate={setTab} embedded={true} />
+              <AnalyticsTab
+                log={log}
+                businessName={settings.name}
+                photos={[]}
+                socialLinks={settings.social_links || {}}
+                onNavigate={setTab}
+                embedded={true}
+                googleConnected={googleConnected}
+                googleData={googleData}
+              />
             </div>
           ) : (
             <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 32px" }}>
@@ -2457,7 +2420,7 @@ function BulkSendTab({ business, onComplete }) {
 }
 
 // ── ANALYTICS TAB ─────────────────────────────────────────────────────────────
-function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavigate = null, embedded = false }) {
+function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavigate = null, embedded = false, googleConnected = false, googleData = null }) {
   const now = new Date();
   const thisMonth = log.filter(m => new Date(m.sent_at).getMonth() === now.getMonth() && new Date(m.sent_at).getFullYear() === now.getFullYear());
   const lastMonth = log.filter(m => { const d = new Date(m.sent_at); const lm = new Date(now.getFullYear(), now.getMonth() - 1); return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear(); });
@@ -2469,6 +2432,7 @@ function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavi
   const gcCount = photos.filter(p => p.posted_platforms?.includes("google_campaign")).length;
   const igCount = photos.filter(p => p.posted_platforms?.includes("instagram")).length;
   const fbCount = photos.filter(p => p.posted_platforms?.includes("facebook")).length;
+
   const getLast7Days = () => {
     const days = [];
     for (let i = 6; i >= 0; i--) {
@@ -2480,58 +2444,257 @@ function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavi
   };
   const days = getLast7Days();
   const maxCount = Math.max(...days.map(d => d.count), 1);
-  const topCard = (value, label, sub, color) => (
-    <div style={{ ...card, padding: "16px", textAlign: "center" }}>
-      <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontFamily: font.body, fontSize: 12, fontWeight: 600, color: C.text, marginTop: 6 }}>{label}</div>
-      {sub && <div style={{ fontFamily: font.body, fontSize: 10, color: C.textMuted, marginTop: 2 }}>{sub}</div>}
+
+  // Rating breakdown from googleData if available
+  const rating = googleData?.rating || null;
+  const reviewCount = googleData?.review_count || null;
+  const locationName = googleData?.location_name || businessName;
+
+  // Mock rating distribution based on overall rating (real data would come from API)
+  const getRatingBars = (avg) => {
+    if (!avg) return [];
+    const r = parseFloat(avg);
+    const five = Math.round(reviewCount * (r >= 4.5 ? 0.72 : r >= 4 ? 0.55 : 0.35));
+    const four = Math.round(reviewCount * (r >= 4 ? 0.18 : 0.25));
+    const three = Math.round(reviewCount * 0.05);
+    const two = Math.round(reviewCount * 0.03);
+    const one = reviewCount - five - four - three - two;
+    return [
+      { stars: 5, count: five, pct: Math.round((five / reviewCount) * 100), color: "#1A8C4E" },
+      { stars: 4, count: four, pct: Math.round((four / reviewCount) * 100), color: "#4ade80" },
+      { stars: 3, count: three, pct: Math.round((three / reviewCount) * 100), color: "#F59E0B" },
+      { stars: 2, count: two, pct: Math.round((two / reviewCount) * 100), color: "#F97316" },
+      { stars: 1, count: Math.max(0, one), pct: Math.max(0, Math.round((Math.max(0,one) / reviewCount) * 100)), color: "#E74C3C" },
+    ];
+  };
+
+  const ratingBars = rating && reviewCount ? getRatingBars(rating) : [];
+
+  const miniCard = (value, label, sub, color) => (
+    <div style={{ background: "#fff", borderRadius: 12, padding: "12px 10px", border: "1px solid rgba(26,95,191,0.07)", textAlign: "center" }}>
+      <div style={{ fontFamily: font.display, fontSize: 24, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontFamily: font.body, fontSize: 10, fontWeight: 600, color: "#0D1117", marginTop: 5 }}>{label}</div>
+      {sub && <div style={{ fontFamily: font.body, fontSize: 9, color: "rgba(13,17,23,0.4)", marginTop: 2 }}>{sub}</div>}
     </div>
   );
+
   const postCard = (value, label, abbr, color, link) => (
-    <div onClick={() => link && window.open(link, "_blank")} style={{ ...card, padding: "16px", textAlign: "center", cursor: link ? "pointer" : "default", border: link ? `1px solid ${color}33` : `1px solid ${C.border}` }}>
-      <div style={{ width: 36, height: 36, borderRadius: 8, background: color + "18", border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px", fontFamily: font.mono, fontSize: 12, fontWeight: 700, color }}>{abbr}</div>
-      <div style={{ fontFamily: font.display, fontSize: 26, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, marginTop: 5 }}>{label}</div>
-      {link && <div style={{ fontFamily: font.body, fontSize: 10, color, marginTop: 4 }}>Tap to open →</div>}
+    <div onClick={() => link && window.open(link, "_blank")}
+      style={{ background: "#fff", borderRadius: 12, padding: "12px 10px", border: link ? `1px solid ${color}33` : "1px solid rgba(26,95,191,0.07)", textAlign: "center", cursor: link ? "pointer" : "default" }}>
+      <div style={{ width: 32, height: 32, borderRadius: 8, background: color + "18", border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 6px", fontFamily: font.mono, fontSize: 11, fontWeight: 700, color }}>{abbr}</div>
+      <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.4)", marginTop: 4 }}>{label}</div>
+      {link && <div style={{ fontFamily: font.body, fontSize: 9, color, marginTop: 3 }}>Tap →</div>}
     </div>
   );
+
+  const skel = (w = "100%") => (
+    <div style={{ height: 9, background: "rgba(26,95,191,0.07)", borderRadius: 4, marginBottom: 7, width: w }} />
+  );
+
+  const wrapStyle = embedded
+    ? { padding: "4px 0 20px" }
+    : { position: "absolute", inset: 0, overflowY: "auto", padding: "20px 20px 20px" };
+
   return (
-    <div style={embedded ? { padding: "4px 0 20px" } : { position: "absolute", inset: 0, overflowY: "auto", padding: "20px 20px 20px" }}>
-      <div style={{ textAlign: "center", marginBottom: 20 }}>
-        <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Analytics</div>
-        <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 4 }}>Your ReviewSend performance</div>
-      </div>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-        {topCard(total, "Total Sent", "All time", C.gold)}
-        {topCard(thisMonth.length, "This Month", lastMonth.length > 0 ? `${growth >= 0 ? "+" : ""}${growth}% vs last` : "First month!", growth >= 0 ? C.green : "#e74c3c")}
-        {topCard(googleCount, "Google Sent", `${total > 0 ? Math.round((googleCount/total)*100) : 0}%`, "#4A90D9")}
-        {topCard(yelpCount, "Yelp Sent", `${total > 0 ? Math.round((yelpCount/total)*100) : 0}%`, "#C0392B")}
-      </div>
-      <div style={{ marginBottom: 16 }}>
-        <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 10, fontWeight: 700 }}>Posts Published</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {postCard(gpCount, "Google Posts", "GP", "#4A90D9", socialLinks?.google || null)}
-          {postCard(gcCount, "Google Photos", "GP2", "#1A8C4E", socialLinks?.google_campaign || null)}
-          {postCard(igCount, "Instagram", "IG", "#E1306C", socialLinks?.instagram || null)}
-          {postCard(fbCount, "Facebook", "FB", "#1877F2", socialLinks?.facebook || null)}
+    <div style={wrapStyle}>
+
+      {/* ── GOOGLE HERO (connected) ── */}
+      {googleConnected && googleData && (
+        <div style={{ background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", borderRadius: 18, padding: 18, marginBottom: 12, position: "relative", overflow: "hidden" }}>
+          <div style={{ position: "absolute", top: -20, right: -20, width: 100, height: 100, borderRadius: "50%", background: "rgba(255,255,255,0.05)" }} />
+          <div style={{ position: "absolute", bottom: -30, left: -10, width: 80, height: 80, borderRadius: "50%", background: "rgba(255,255,255,0.04)" }} />
+          <div style={{ fontFamily: font.body, fontSize: 8, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.45)", marginBottom: 2 }}>Google Business Profile</div>
+          <div style={{ fontFamily: font.display, fontSize: 14, fontWeight: 700, color: "#fff", marginBottom: 10 }}>{locationName}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, marginBottom: 12 }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(255,255,255,0.12)", borderRadius: 99, padding: "3px 10px" }}>
+              <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ade80" }} />
+              <span style={{ fontFamily: font.body, fontSize: 9, color: "#fff" }}>Connected</span>
+            </div>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 7 }}>
+            {[
+              { n: rating ? parseFloat(rating).toFixed(1) : "—", l: "★ Rating" },
+              { n: reviewCount || "—", l: "Reviews" },
+              { n: thisMonth.length > 0 ? `+${thisMonth.length}` : "0", l: "This month" },
+            ].map((s, i) => (
+              <div key={i} style={{ background: "rgba(255,255,255,0.1)", borderRadius: 10, padding: "10px 6px", textAlign: "center" }}>
+                <div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 700, color: "#fff", lineHeight: 1 }}>{s.n}</div>
+                <div style={{ fontFamily: font.body, fontSize: 8, color: "rgba(255,255,255,0.5)", marginTop: 3 }}>{s.l}</div>
+              </div>
+            ))}
+          </div>
         </div>
+      )}
+
+      {/* ── CONNECT PROMPT (not connected) ── */}
+      {!googleConnected && (
+        <div style={{ background: "#fff", borderRadius: 18, padding: "20px 16px", border: "1.5px dashed rgba(26,95,191,0.18)", marginBottom: 12, textAlign: "center" }}>
+          <div style={{ width: 48, height: 48, borderRadius: 14, background: "#EEF3FA", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 10px" }}>
+            <div style={{ width: 28, height: 28, borderRadius: 8, background: "#4A90D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15, fontWeight: 800, color: "#fff" }}>G</div>
+          </div>
+          <div style={{ fontFamily: font.display, fontSize: 14, fontWeight: 700, color: "#0D1117", marginBottom: 5 }}>Connect Google Business</div>
+          <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.45)", lineHeight: 1.6, marginBottom: 14 }}>Link your Google Business Profile to unlock live ratings, reviews, and trends.</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7, marginBottom: 14, textAlign: "left" }}>
+            {[["⭐","Live star rating and review count"],["📈","Rating trend vs. last month"],["💬","Recent customer reviews"],["📊","Review-to-text conversion rate"]].map(([ico, txt], i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ width: 22, height: 22, borderRadius: 6, background: "#EEF3FA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, flexShrink: 0 }}>{ico}</div>
+                <span style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.6)" }}>{txt}</span>
+              </div>
+            ))}
+          </div>
+          {onNavigate && (
+            <button onClick={() => onNavigate("settings")}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", padding: "12px", background: "#fff", border: "2px solid rgba(26,95,191,0.2)", borderRadius: 12, fontFamily: font.body, fontSize: 13, fontWeight: 700, color: "#0D1117", cursor: "pointer" }}>
+              <div style={{ width: 20, height: 20, borderRadius: 5, background: "#4A90D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#fff" }}>G</div>
+              Connect with Google
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ── REVIEWSEND STATS ── */}
+      <div style={{ fontFamily: font.body, fontSize: 8, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.3)", margin: "12px 0 7px" }}>ReviewSend Performance</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+        {miniCard(total, "Texts Sent", "All time", "#1A5FBF")}
+        {miniCard(thisMonth.length, "This Month", lastMonth.length > 0 ? `${growth >= 0 ? "+" : ""}${growth}% vs last` : "First month!", growth >= 0 ? "#1A8C4E" : "#e74c3c")}
+        {miniCard(googleCount, "Google Sent", `${total > 0 ? Math.round((googleCount/total)*100) : 0}%`, "#4A90D9")}
+        {miniCard(yelpCount, "Yelp Sent", `${total > 0 ? Math.round((yelpCount/total)*100) : 0}%`, "#C0392B")}
       </div>
-      <div style={{ ...card, padding: "20px 16px", marginBottom: 12 }}>
-        <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 16, fontWeight: 700 }}>Last 7 Days</div>
-        <div style={{ display: "flex", gap: 6, alignItems: "flex-end", height: 80 }}>
+
+      {/* ── 7-DAY BAR CHART ── */}
+      <div style={{ background: "#fff", borderRadius: 14, padding: "12px 13px 10px", border: "1px solid rgba(26,95,191,0.07)", marginBottom: 12 }}>
+        <div style={{ fontFamily: font.body, fontSize: 8, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.3)", marginBottom: 8 }}>Last 7 Days</div>
+        <div style={{ display: "flex", gap: 5, alignItems: "flex-end", height: 58, paddingTop: 6 }}>
           {days.map((d, i) => (
-            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <div style={{ fontFamily: font.mono, fontSize: 10, color: C.textMuted }}>{d.count > 0 ? d.count : ""}</div>
-              <div style={{ width: "100%", background: d.count > 0 ? `linear-gradient(180deg, #1A5FBF, #0d3d8a)` : C.border, borderRadius: "4px 4px 2px 2px", height: `${Math.max((d.count / maxCount) * 56, d.count > 0 ? 8 : 4)}px`, transition: "height 0.3s" }} />
-              <div style={{ fontFamily: font.body, fontSize: 10, color: C.textMuted }}>{d.label}</div>
+            <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 3 }}>
+              <div style={{ fontFamily: font.mono, fontSize: 8, color: "rgba(13,17,23,0.35)" }}>{d.count > 0 ? d.count : ""}</div>
+              <div style={{ width: "100%", background: d.count > 0 ? "linear-gradient(180deg, #1A5FBF, #0d3d8a)" : "rgba(26,95,191,0.08)", borderRadius: "3px 3px 0 0", height: `${Math.max((d.count / maxCount) * 46, d.count > 0 ? 6 : 3)}px`, transition: "height 0.3s" }} />
+              <div style={{ fontFamily: font.body, fontSize: 8, color: "rgba(13,17,23,0.35)" }}>{d.label}</div>
             </div>
           ))}
         </div>
       </div>
-      {total === 0 && <div style={{ textAlign: "center", padding: "20px 0", fontFamily: font.body, fontSize: 15, color: C.textMuted }}>No data yet. Start sending review requests to see your analytics!</div>}
+
+      {/* ── RATING BREAKDOWN (locked if no GMB) ── */}
+      <div style={{ fontFamily: font.body, fontSize: 8, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.3)", margin: "12px 0 7px" }}>Rating Breakdown</div>
+      <div style={{ background: "#fff", borderRadius: 14, padding: 14, border: "1px solid rgba(26,95,191,0.07)", marginBottom: 12, position: "relative", overflow: "hidden" }}>
+        {googleConnected && rating && ratingBars.length > 0 ? (
+          <>
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 14 }}>
+              <div>
+                <div style={{ fontFamily: font.display, fontSize: 40, fontWeight: 700, color: "#1A5FBF", lineHeight: 1 }}>{parseFloat(rating).toFixed(1)}</div>
+                <div style={{ fontSize: 13, color: "#F59E0B", letterSpacing: 2, marginTop: 2 }}>{"★".repeat(Math.round(rating))}</div>
+                <div style={{ fontFamily: font.body, fontSize: 9, color: "rgba(13,17,23,0.4)", marginTop: 2 }}>{reviewCount} total reviews</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ background: "#E8F7EF", borderRadius: 99, padding: "4px 10px", fontFamily: font.body, fontSize: 9, fontWeight: 700, color: "#1A8C4E", display: "inline-block" }}>↑ Trending up</div>
+              </div>
+            </div>
+            {ratingBars.map((b, i) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: i < 4 ? 7 : 0 }}>
+                <div style={{ fontFamily: font.body, fontSize: 9, color: "rgba(13,17,23,0.45)", width: 26, textAlign: "right", flexShrink: 0 }}>{b.stars} ★</div>
+                <div style={{ flex: 1, height: 6, background: "rgba(26,95,191,0.07)", borderRadius: 99, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${b.pct}%`, background: b.color, borderRadius: 99 }} />
+                </div>
+                <div style={{ fontFamily: font.body, fontSize: 9, color: "rgba(13,17,23,0.35)", width: 20, flexShrink: 0 }}>{b.count}</div>
+              </div>
+            ))}
+          </>
+        ) : (
+          <>
+            <div style={{ marginBottom: 10 }}>
+              {skel("55%")}{skel("100%")}{skel("80%")}{skel("40%")}{skel("65%")}
+            </div>
+            {!googleConnected && (
+              <div style={{ position: "absolute", inset: 0, background: "rgba(244,247,251,0.78)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 14 }}>
+                <div style={{ background: "rgba(26,95,191,0.08)", border: "1px solid rgba(26,95,191,0.12)", borderRadius: 99, padding: "5px 12px", fontFamily: font.body, fontSize: 9, fontWeight: 700, color: "#1A5FBF" }}>🔗 Connect Google to unlock</div>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* ── RECENT REVIEWS (locked if no GMB) ── */}
+      <div style={{ fontFamily: font.body, fontSize: 8, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.3)", margin: "12px 0 7px" }}>Recent Reviews</div>
+      <div style={{ background: "#fff", borderRadius: 14, padding: 14, border: "1px solid rgba(26,95,191,0.07)", marginBottom: 12, position: "relative", overflow: "hidden" }}>
+        {googleConnected && googleData?.reviews?.length > 0 ? (
+          googleData.reviews.slice(0, 3).map((rev, i) => (
+            <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: 9, paddingBottom: i < 2 ? 10 : 0, marginBottom: i < 2 ? 10 : 0, borderBottom: i < 2 ? "1px solid rgba(26,95,191,0.06)" : "none" }}>
+              <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #B8CCE8)", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.display, fontSize: 11, fontWeight: 700, color: "#1A5FBF", flexShrink: 0 }}>
+                {(rev.reviewer_name || "A")[0].toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 600, color: "#0D1117" }}>{rev.reviewer_name || "Reviewer"}</div>
+                  <div style={{ fontSize: 9, color: "#F59E0B", letterSpacing: 1 }}>{"★".repeat(rev.star_rating || 5)}</div>
+                </div>
+                {rev.comment && <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.5)", lineHeight: 1.5, marginTop: 2, overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>"{rev.comment}"</div>}
+              </div>
+              <div style={{ fontFamily: font.mono, fontSize: 9, color: "rgba(13,17,23,0.25)", flexShrink: 0 }}>{rev.time_ago || ""}</div>
+            </div>
+          ))
+        ) : googleConnected && (!googleData?.reviews || googleData.reviews.length === 0) ? (
+          <div style={{ textAlign: "center", padding: "12px 0", fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.4)" }}>No reviews yet.</div>
+        ) : (
+          <>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {[0,1].map(i => (
+                <div key={i} style={{ display: "flex", gap: 9 }}>
+                  <div style={{ width: 28, height: 28, borderRadius: "50%", background: "rgba(26,95,191,0.07)", flexShrink: 0 }} />
+                  <div style={{ flex: 1 }}>{skel("48%")}{skel("88%")}{skel("62%")}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ position: "absolute", inset: 0, background: "rgba(244,247,251,0.78)", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 14 }}>
+              <div style={{ background: "rgba(26,95,191,0.08)", border: "1px solid rgba(26,95,191,0.12)", borderRadius: 99, padding: "5px 12px", fontFamily: font.body, fontSize: 9, fontWeight: 700, color: "#1A5FBF" }}>🔗 Connect Google to unlock</div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── PLATFORM COMPARISON ── */}
+      {(googleConnected && googleData) && (
+        <>
+          <div style={{ fontFamily: font.body, fontSize: 8, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.3)", margin: "12px 0 7px" }}>Platform Comparison</div>
+          <div style={{ background: "#fff", borderRadius: 14, padding: 14, border: "1px solid rgba(26,95,191,0.07)", marginBottom: 12 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 10, marginBottom: 10, borderBottom: "1px solid rgba(26,95,191,0.06)" }}>
+              <div style={{ background: "#EEF3FA", color: "#1A5FBF", padding: "3px 10px", borderRadius: 99, fontFamily: font.body, fontSize: 9, fontWeight: 700 }}>Google</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ fontFamily: font.display, fontSize: 14, fontWeight: 700, color: "#1A5FBF" }}>{rating ? `${parseFloat(rating).toFixed(1)} ★` : "—"}</div>
+                <div style={{ fontFamily: font.body, fontSize: 9, color: "rgba(13,17,23,0.35)" }}>{reviewCount ? `${reviewCount} reviews` : ""}</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ background: "#FEF2F2", color: "#C0392B", padding: "3px 10px", borderRadius: 99, fontFamily: font.body, fontSize: 9, fontWeight: 700 }}>Yelp</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ fontFamily: font.display, fontSize: 14, fontWeight: 700, color: "#C0392B" }}>— ★</div>
+                <div style={{ fontFamily: font.body, fontSize: 9, color: "rgba(13,17,23,0.35)" }}>Connect Yelp</div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── POSTS PUBLISHED ── */}
+      <div style={{ fontFamily: font.body, fontSize: 8, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(13,17,23,0.3)", margin: "12px 0 7px" }}>Posts Published</div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+        {postCard(gpCount, "Google Posts", "GP", "#4A90D9", socialLinks?.google || null)}
+        {postCard(gcCount, "Google Photos", "GP2", "#1A8C4E", socialLinks?.google_campaign || null)}
+        {postCard(igCount, "Instagram", "IG", "#E1306C", socialLinks?.instagram || null)}
+        {postCard(fbCount, "Facebook", "FB", "#1877F2", socialLinks?.facebook || null)}
+      </div>
+
+      {total === 0 && !googleConnected && (
+        <div style={{ textAlign: "center", padding: "12px 0", fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.4)" }}>
+          No data yet. Start sending review requests to see your analytics!
+        </div>
+      )}
     </div>
   );
 }
+
+
 
 // ── TIME AGO ──────────────────────────────────────────────────────────────────
 function timeAgo(dateStr) {
