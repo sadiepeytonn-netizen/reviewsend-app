@@ -2658,7 +2658,14 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
               <div style={{ height: 2, background: isFullyPosted ? "#1A8C4E" : isPartiallyPosted ? "#F59E0B" : photo.status === "downloaded" ? "#3B82F6" : "#E5E7EB" }} />
               <div style={{ padding: "12px 16px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: "#F4F7FB", border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>📷</div>
+                  <div style={{ width: 56, height: 56, borderRadius: 8, background: "#F4F7FB", border: `1px solid ${C.border}`, overflow: "hidden", flexShrink: 0 }}>
+                    <img
+                      src={supabase.storage.from("business-photos").getPublicUrl(photo.file_path).data.publicUrl}
+                      alt={photo.file_name}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                      onError={e => { e.target.style.display = "none"; e.target.parentNode.innerHTML = "📷"; }}
+                    />
+                  </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: font.display, fontSize: 13, color: C.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{photo.file_name}</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
@@ -2720,9 +2727,16 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
               </div>
               <button onClick={closeCaptionModal} style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: C.textMuted, lineHeight: 1 }}>×</button>
             </div>
-            <div style={{ width: "100%", height: 140, background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 6 }}>
-              <div style={{ fontSize: 36 }}>📷</div>
-              <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{captionModal.photo.file_name}</div>
+            <div style={{ width: "100%", height: 180, background: "#F4F7FB", overflow: "hidden", position: "relative" }}>
+              <img
+                src={supabase.storage.from("business-photos").getPublicUrl(captionModal.photo.file_path).data.publicUrl}
+                alt={captionModal.photo.file_name}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                onError={e => { e.target.style.display = "none"; }}
+              />
+              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, background: "linear-gradient(transparent, rgba(0,0,0,0.5))", padding: "20px 14px 10px" }}>
+                <div style={{ fontFamily: font.mono, fontSize: 11, color: "#fff" }}>{captionModal.photo.file_name}</div>
+              </div>
             </div>
             <div style={{ padding: "12px 20px 0", display: "flex", gap: 6, flexWrap: "wrap" }}>
               {PHOTO_PLATFORMS.map(p => (
