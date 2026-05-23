@@ -217,7 +217,7 @@ export default function App() {
     const oauthState = urlParams.get("state");
     if (oauthCode && oauthState) {
       sessionStorage.setItem("google_oauth_code", oauthCode);
-      sessionStorage.setItem("google_oauth_state", oauthState);
+      sessionStorage.setItem("google_oauth_state", String(oauthState));
       window.history.replaceState({}, "", window.location.pathname);
     }
 
@@ -1513,7 +1513,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   const GOOGLE_SCOPES = "https://www.googleapis.com/auth/business.manage";
 
   const connectGoogle = () => {
-    const params = new URLSearchParams({ client_id: GOOGLE_CLIENT_ID, redirect_uri: REDIRECT_URI, response_type: "code", scope: GOOGLE_SCOPES, access_type: "offline", prompt: "consent", state: data.id });
+    const params = new URLSearchParams({ client_id: GOOGLE_CLIENT_ID, redirect_uri: REDIRECT_URI, response_type: "code", scope: GOOGLE_SCOPES, access_type: "offline", prompt: "consent", state: String(data.id) });
     window.location.href = `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
   };
 
@@ -1539,7 +1539,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   useEffect(() => {
     const code = sessionStorage.getItem("google_oauth_code");
     const state = sessionStorage.getItem("google_oauth_state");
-    if (code && state === data.id) {
+    if (code && String(state) === String(data.id)) {
       sessionStorage.removeItem("google_oauth_code");
       sessionStorage.removeItem("google_oauth_state");
       (async () => {
