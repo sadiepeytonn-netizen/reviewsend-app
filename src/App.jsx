@@ -1214,39 +1214,419 @@ function MarketingDashboard({ data, onSignOut }) {
     </div>
   );
 }
-// ── ACCOUNT MANAGER DASHBOARD ─────────────────────────────────────────────────
-// (Same structure as MarketingDashboard but scoped to account_manager_id)
-function AccountManagerDashboard({ data, onSignOut }) {
-  const [businesses, setBusinesses] = useState([]);
-  const [messages, setMessages] = useState([]);
-  const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
-  const [tab, setTab] = useState("clients");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [selectedBusiness, setSelectedBusiness] = useState(null);
-  const [selectedBizTab, setSelectedBizTab] = useState("analytics");
-  const [selectedBizPhotos, setSelectedBizPhotos] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
-  const [managerChatMessages, setManagerChatMessages] = useState([]);
-  const [managerChatInput, setManagerChatInput] = useState("");
-  const [managerChatSending, setManagerChatSending] = useState(false);
-  const menuRef = useRef(null);
+// ── ACCOUNT MANAGER REBUILD ───────────────────────────────────────────────────
+// New: one master calendar per account manager (filterable per client), a private
+// running notes log per client, and full client settings editing (business info,
+// message template, logo, social links, team members, feature toggles).
+// Needs two new Supabase tables — see supabase-new-tables.sql. Nothing else in
+// this file changed: MarketingDashboard, SuperAdminDashboard, and BusinessApp
+// (the business-owner side) are untouched below.
+//
+// Known simplification: Google Business Profile "Connect" isn't wired up here —
+// you can see status and Disconnect, but connecting still happens from the
+// business owner's own Settings tab (same as today), since it requires signing
+// into that specific client's Google account.
+
+// ── DATE HELPERS ──────────────────────────────────────────────────────────
+function daysInMonth(d) { return new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate(); }
+function firstWeekdayOfMonth(d) { return new Date(d.getFullYear(), d.getMonth(), 1).getDay(); }
+function isSameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
+function monthLabel(d) { return d.toLocaleDateString("en-US", { month: "long", year: "numeric" }); }
+function fmtTime(d) { return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }
+function toDateInputValue(d) { return d.toISOString().slice(0, 10); }
+function toTimeInputValue(d) { return d.toTimeString().slice(0, 5); }
+
+// ── CALENDAR GRID (shared by the main calendar and the per-client mini one) ─
+function CalendarMonthGrid({ monthDate, appointments, businessNameById, filterBusinessId, onDayClick, onApptClick, compact }) {
+  const total = daysInMonth(monthDate);
+  const offset = firstWeekdayOfMonth(monthDate);
+  const today = new Date();
+  const cells = [];
+  for (let i = 0; i < offset; i++) cells.push(null);
+  for (let day = 1; day <= total; day++) cells.push(day);
+
+  const apptsForDay = (day) => {
+    const cellDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
+    return appointments.filter(a => {
+      if (filterBusinessId && a.business_id !== filterBusinessId) return false;
+      return isSameDay(new Date(a.starts_at), cellDate);
+    }).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+  };
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4 }}>
+      {cells.map((day, i) => {
+        if (day === null) return <div key={"blank" + i} />;
+        const cellDate = new Date(monthDate.getFullYear(), monthDate.getMonth(), day);
+        const isToday = isSameDay(cellDate, today);
+        const dayAppts = apptsForDay(day);
+        return (
+          <div key={day}
+            onClick={() => onDayClick(cellDate)}
+            style={{
+              border: `1px solid ${isToday ? C.gold : C.border}`,
+              background: isToday ? "#EEF3FA" : "#fff",
+              borderRadius: 8, minHeight: compact ? 30 : 46, padding: 3,
+              cursor: "pointer", fontFamily: font.mono, fontSize: 10, color: C.textMuted,
+            }}>
+            <div style={{ fontWeight: isToday ? 700 : 400 }}>{day}</div>
+            {dayAppts.map(a => (
+              <div key={a.id}
+                onClick={(e) => { e.stopPropagation(); onApptClick(a); }}
+                title={businessNameById[a.business_id] + " — " + a.title}
+                style={{ marginTop: 2, fontSize: 9, background: "#ede9fe", color: "#6d28d9", borderRadius: 4, padding: "1px 3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {fmtTime(new Date(a.starts_at))} {businessNameById[a.business_id]}
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── SCHEDULE / EDIT APPOINTMENT MODAL ────────────────────────────────────────
+function ScheduleModal({ businesses, defaultBusinessId, defaultDate, editingAppt, onClose, onSave, onDelete }) {
+  const [search, setSearch] = useState("");
+  const [businessId, setBusinessId] = useState(editingAppt ? editingAppt.business_id : (defaultBusinessId || ""));
+  const [date, setDate] = useState(toDateInputValue(editingAppt ? new Date(editingAppt.starts_at) : (defaultDate || new Date())));
+  const [time, setTime] = useState(editingAppt ? toTimeInputValue(new Date(editingAppt.starts_at)) : "09:00");
+  const [duration, setDuration] = useState(editingAppt ? editingAppt.duration_minutes : 30);
+  const [title, setTitle] = useState(editingAppt ? editingAppt.title : "");
+  const [notes, setNotes] = useState(editingAppt ? (editingAppt.notes || "") : "");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const filtered = businesses.filter(b => b.name.toLowerCase().includes(search.toLowerCase()));
+
+  const handleSave = async () => {
+    if (!businessId || !date || !time) { setError("Pick a client, date, and time."); return; }
+    setSaving(true);
+    const starts_at = new Date(`${date}T${time}:00`).toISOString();
+    await onSave({ business_id: businessId, starts_at, duration_minutes: Number(duration) || 30, title: title.trim() || "Appointment", notes: notes.trim() || null });
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}
+      onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: 24, width: "100%", maxWidth: 380, boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+        <div style={{ fontFamily: font.display, fontSize: 18, fontWeight: 600, color: C.text, marginBottom: 16 }}>
+          {editingAppt ? "Edit appointment" : "Schedule appointment"}
+        </div>
+
+        <Label>Client</Label>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search clients…" style={{ ...inputStyle, marginBottom: 6 }} />
+        <select size={4} value={businessId} onChange={e => setBusinessId(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }}>
+          {filtered.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+        </select>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
+          <div><Label>Date</Label><input type="date" value={date} onChange={e => setDate(e.target.value)} style={inputStyle} /></div>
+          <div><Label>Time</Label><input type="time" value={time} onChange={e => setTime(e.target.value)} style={inputStyle} /></div>
+        </div>
+
+        <Label>Duration</Label>
+        <select value={duration} onChange={e => setDuration(e.target.value)} style={{ ...inputStyle, marginBottom: 14 }}>
+          <option value={15}>15 minutes</option>
+          <option value={30}>30 minutes</option>
+          <option value={60}>1 hour</option>
+          <option value={120}>2 hours</option>
+        </select>
+
+        <Label>Title</Label>
+        <input value={title} onChange={e => setTitle(e.target.value)} placeholder="Renewal call" style={{ ...inputStyle, marginBottom: 14 }} />
+
+        <Label>Notes (optional)</Label>
+        <textarea rows={2} value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inputStyle, resize: "vertical", marginBottom: 8 }} />
+
+        {error && <p style={{ color: "#e74c3c", fontSize: 13, fontFamily: font.body, marginBottom: 10 }}>{error}</p>}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+          {editingAppt && (
+            <button onClick={() => onDelete(editingAppt.id)}
+              style={{ padding: "10px 14px", background: "#fff", color: "#e74c3c", border: "1.5px solid #e74c3c88", borderRadius: 8, fontFamily: font.body, fontSize: 13, cursor: "pointer" }}>
+              Cancel appt.
+            </button>
+          )}
+          <div style={{ display: "flex", gap: 10, marginLeft: "auto" }}>
+            <button onClick={onClose} style={{ ...ghostBtnStyle, padding: "10px 16px", fontSize: 13 }}>Close</button>
+            <button onClick={handleSave} disabled={saving} style={{ ...btnStyle, padding: "10px 16px", fontSize: 13 }}>{saving ? "Saving…" : "Save"}</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── CLIENT NOTES SECTION (private, append-only log) ──────────────────────────
+function ClientNotesSection({ businessId, authorName }) {
+  const [notes, setNotes] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { loadNotes(); }, [businessId]);
+
+  const loadNotes = async () => {
+    const { data } = await supabase.from("client_notes").select("*").eq("business_id", businessId).order("created_at", { ascending: false });
+    if (data) setNotes(data);
+  };
+
+  const saveNote = async () => {
+    if (!text.trim()) return;
+    setSaving(true);
+    const { data } = await supabase.from("client_notes").insert([{ business_id: businessId, author_name: authorName, note: text.trim() }]).select().single();
+    if (data) setNotes(prev => [data, ...prev]);
+    setText(""); setAdding(false); setSaving(false);
+  };
+
+  return (
+    <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+      <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 12 }}>Notes</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
+        {notes.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>No notes yet.</div>}
+        {notes.map(n => (
+          <div key={n.id} style={{ borderLeft: `2px solid ${C.gold}`, paddingLeft: 10 }}>
+            <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{n.author_name} · {new Date(n.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+            <div style={{ fontFamily: font.body, fontSize: 13, color: C.text }}>{n.note}</div>
+          </div>
+        ))}
+      </div>
+      {adding ? (
+        <div>
+          <textarea rows={2} value={text} onChange={e => setText(e.target.value)} placeholder="Write a note" style={{ ...inputStyle, marginBottom: 8 }} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={saveNote} disabled={saving} style={{ ...btnStyle, fontSize: 13, padding: "8px 14px" }}>{saving ? "Saving…" : "Save"}</button>
+            <button onClick={() => { setAdding(false); setText(""); }} style={{ ...ghostBtnStyle, fontSize: 13, padding: "8px 14px" }}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAdding(true)} style={{ ...ghostBtnStyle, fontSize: 13, padding: "8px 14px" }}>+ Add note</button>
+      )}
+    </div>
+  );
+}
+
+// ── FULL CLIENT SETTINGS (everything the business owner can edit, editable here too) ─
+function ClientSettingsFull({ business, onSaved }) {
+  const [form, setForm] = useState({
+    name: business.name || "", google_link: business.google_link || "", yelp_link: business.yelp_link || "",
+    message_template: business.message_template || "",
+    social_google: business.social_links?.google || "", social_instagram: business.social_links?.instagram || "", social_facebook: business.social_links?.facebook || "",
+    city: business.city || "", state: business.state || "", business_type: business.business_type || "", short_description: business.short_description || "",
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoUrl, setLogoUrl] = useState(business.logo_url || null);
+  const logoInputRef = useRef(null);
+  const [employees, setEmployees] = useState([]);
+  const [addingEmp, setAddingEmp] = useState(false);
+  const [newEmp, setNewEmp] = useState({ name: "", email: "", password: "" });
+  const [features, setFeatures] = useState(business.features || { send: true, analytics: false, history: false, google_posts: false, social: false });
 
   useEffect(() => {
-    loadData();
-    const handler = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+    supabase.from("employees").select("*").eq("business_id", business.id).then(({ data }) => setEmployees(data || []));
+  }, [business.id]);
 
-  const loadData = async () => {
-    const { data: biz } = await supabase.from("businesses").select("*").eq("account_manager_id", data.id).order("created_at", { ascending: false });
+  const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }));
+
+  const handleSave = async () => {
+    setSaving(true);
+    await supabase.from("businesses").update({
+      name: form.name, google_link: form.google_link, yelp_link: form.yelp_link,
+      message_template: form.message_template,
+      social_links: { google: form.social_google, instagram: form.social_instagram, facebook: form.social_facebook },
+      city: form.city, state: form.state, business_type: form.business_type, short_description: form.short_description,
+    }).eq("id", business.id);
+    setSaving(false);
+    setSaved(true);
+    if (onSaved) onSaved({ ...business, name: form.name });
+    setTimeout(() => setSaved(false), 2000);
+  };
+
+  const toggleFeature = async (key) => {
+    const updated = { ...features, [key]: !features[key] };
+    setFeatures(updated);
+    await supabase.from("businesses").update({ features: updated }).eq("id", business.id);
+  };
+
+  const handleLogoUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const validation = validateImageFile(file);
+    if (!validation.ok) { alert(validation.error); e.target.value = ""; return; }
+    setLogoUploading(true);
+    const fileName = `${business.id}/logo-${Date.now()}.${file.name.split(".").pop()}`;
+    const { error } = await supabase.storage.from("business-logos").upload(fileName, file, { upsert: true });
+    if (!error) {
+      const { data: urlData } = supabase.storage.from("business-logos").getPublicUrl(fileName);
+      await supabase.from("businesses").update({ logo_url: urlData.publicUrl }).eq("id", business.id);
+      setLogoUrl(urlData.publicUrl);
+    }
+    setLogoUploading(false);
+  };
+
+  const removeLogo = async () => {
+    await supabase.from("businesses").update({ logo_url: null }).eq("id", business.id);
+    setLogoUrl(null);
+  };
+
+  const addEmployee = async () => {
+    if (!newEmp.name || !newEmp.email || !newEmp.password) { alert("Fill in all fields."); return; }
+    if (newEmp.password.length < 6) { alert("Password must be at least 6 characters."); return; }
+    const cleanEmail = newEmp.email.trim().toLowerCase();
+    const { error } = await supabase.from("employees").insert([{ business_id: business.id, name: newEmp.name, email: cleanEmail, password: newEmp.password }]);
+    if (!error) {
+      const { data } = await supabase.from("employees").select("*").eq("business_id", business.id);
+      setEmployees(data || []);
+      setNewEmp({ name: "", email: "", password: "" });
+      setAddingEmp(false);
+    } else {
+      alert(error.message.includes("duplicate") ? "An employee with that email already exists." : "Error: " + error.message);
+    }
+  };
+
+  const removeEmployee = async (emp) => {
+    if (!window.confirm(`Remove ${emp.name}?`)) return;
+    await supabase.from("employees").delete().eq("id", emp.id);
+    setEmployees(prev => prev.filter(e => e.id !== emp.id));
+  };
+
+  const disconnectGoogle = async () => {
+    await supabase.from("businesses").update({ google_access_token: null, google_refresh_token: null, google_token_expiry: null }).eq("id", business.id);
+    onSaved && onSaved({ ...business, google_access_token: null });
+  };
+
+  const featureDefs = [["send", "Review requests"], ["google_posts", "Google posts"], ["social", "Instagram & Facebook"], ["analytics", "Analytics"], ["history", "History"]];
+  const businessTypes = ["Restaurant / Food & Beverage", "Salon / Spa / Beauty", "Auto Shop / Dealership", "Healthcare / Medical", "Retail", "Marketing Agency", "Fitness / Gym", "Legal / Law Firm", "Real Estate", "Other"];
+
+  return (
+    <div style={{ ...card, padding: 20 }}>
+      <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 16 }}>Settings &amp; features</div>
+
+      <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Business info</div>
+      <div style={{ marginBottom: 10 }}><Label>Business name</Label><input value={form.name} onChange={set("name")} style={inputStyle} /></div>
+      <div style={{ marginBottom: 10 }}><Label>Google review link (used in texts)</Label><input value={form.google_link} onChange={set("google_link")} style={inputStyle} /></div>
+      <div style={{ marginBottom: 10 }}><Label>Yelp review link (used in texts)</Label><input value={form.yelp_link} onChange={set("yelp_link")} style={inputStyle} /></div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+        <div><Label>City</Label><input value={form.city} onChange={set("city")} style={inputStyle} /></div>
+        <div><Label>State</Label><input value={form.state} onChange={set("state")} style={inputStyle} /></div>
+      </div>
+      <div style={{ marginBottom: 10 }}>
+        <Label>Business type</Label>
+        <select value={form.business_type} onChange={set("business_type")} style={inputStyle}>
+          <option value="">Select one…</option>
+          {businessTypes.map(t => <option key={t} value={t}>{t}</option>)}
+        </select>
+      </div>
+      <div style={{ marginBottom: 20 }}><Label>Short description (used for AI captions)</Label><textarea rows={2} value={form.short_description} onChange={set("short_description")} style={{ ...inputStyle, resize: "vertical" }} /></div>
+
+      <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Message template</div>
+      <textarea rows={3} value={form.message_template} onChange={set("message_template")} style={{ ...inputStyle, resize: "vertical", marginBottom: 4 }} />
+      <p style={{ fontFamily: font.body, fontSize: 11, color: C.textSub, marginBottom: 20 }}>Placeholders: {"{name}"}, {"{business}"}, {"{link}"}</p>
+
+      <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Logo</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
+        {logoUrl ? (
+          <>
+            <img src={logoUrl} alt="Logo" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", border: `1px solid ${C.border}` }} />
+            <button onClick={removeLogo} style={{ ...ghostBtnStyle, fontSize: 12, padding: "6px 12px" }}>Remove logo</button>
+          </>
+        ) : (
+          <>
+            <input type="file" ref={logoInputRef} accept="image/*" onChange={handleLogoUpload} style={{ display: "none" }} />
+            <button onClick={() => logoInputRef.current?.click()} disabled={logoUploading} style={{ ...ghostBtnStyle, fontSize: 12, padding: "6px 12px" }}>{logoUploading ? "Uploading…" : "Upload logo"}</button>
+          </>
+        )}
+      </div>
+
+      <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Social links</div>
+      <div style={{ marginBottom: 10 }}><Label>Google Business Profile URL</Label><input value={form.social_google} onChange={set("social_google")} style={inputStyle} /></div>
+      <div style={{ marginBottom: 10 }}><Label>Instagram</Label><input value={form.social_instagram} onChange={set("social_instagram")} style={inputStyle} /></div>
+      <div style={{ marginBottom: 20 }}><Label>Facebook</Label><input value={form.social_facebook} onChange={set("social_facebook")} style={inputStyle} /></div>
+
+      <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Google Business Profile connection</div>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+        <span style={{ fontFamily: font.body, fontSize: 13, color: business.google_access_token ? C.green : C.textMuted }}>
+          {business.google_access_token ? "Connected" : "Not connected — the business owner connects this from their own Settings tab"}
+        </span>
+        {business.google_access_token && <button onClick={disconnectGoogle} style={{ ...ghostBtnStyle, fontSize: 12, padding: "6px 12px", color: "#e74c3c", borderColor: "#e74c3c88" }}>Disconnect</button>}
+      </div>
+
+      <button onClick={handleSave} disabled={saving} style={{ ...btnStyle, width: "100%", marginBottom: saved ? 8 : 20 }}>{saving ? "Saving…" : "Save settings"}</button>
+      {saved && <p style={{ fontFamily: font.body, fontSize: 12, color: C.green, marginBottom: 20 }}>Saved.</p>}
+
+      <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Team members</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 10 }}>
+        {employees.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>No team members yet.</div>}
+        {employees.map(emp => (
+          <div key={emp.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 10px", border: `1px solid ${C.border}`, borderRadius: 8 }}>
+            <div><div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 600 }}>{emp.name}</div><div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{emp.email}</div></div>
+            <button onClick={() => removeEmployee(emp)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 18 }}>×</button>
+          </div>
+        ))}
+      </div>
+      {addingEmp ? (
+        <div style={{ marginBottom: 20 }}>
+          <input placeholder="Name" value={newEmp.name} onChange={e => setNewEmp(n => ({ ...n, name: e.target.value }))} style={{ ...inputStyle, marginBottom: 8 }} />
+          <input placeholder="Email" value={newEmp.email} onChange={e => setNewEmp(n => ({ ...n, email: e.target.value }))} style={{ ...inputStyle, marginBottom: 8 }} />
+          <input type="password" placeholder="Password" value={newEmp.password} onChange={e => setNewEmp(n => ({ ...n, password: e.target.value }))} style={{ ...inputStyle, marginBottom: 8 }} />
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={addEmployee} style={{ ...btnStyle, fontSize: 13, padding: "8px 14px" }}>Add</button>
+            <button onClick={() => setAddingEmp(false)} style={{ ...ghostBtnStyle, fontSize: 13, padding: "8px 14px" }}>Cancel</button>
+          </div>
+        </div>
+      ) : (
+        <button onClick={() => setAddingEmp(true)} style={{ ...ghostBtnStyle, fontSize: 13, padding: "8px 14px", marginBottom: 20 }}>+ Add team member</button>
+      )}
+
+      <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Features</div>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        {featureDefs.map(([key, label]) => {
+          const on = !!features[key];
+          return (
+            <button key={key} onClick={() => toggleFeature(key)}
+              style={{ padding: "6px 14px", borderRadius: 99, border: `1.5px solid ${on ? C.green : C.border}`, background: on ? C.greenBg : "#fff", color: on ? C.green : C.textMuted, fontFamily: font.body, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+              {on ? "On" : "Off"} — {label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── MAIN ACCOUNT MANAGER DASHBOARD ────────────────────────────────────────────
+function AccountManagerDashboard({ data, onSignOut }) {
+  const [view, setView] = useState("calendar"); // calendar | clients | photos
+  const [businesses, setBusinesses] = useState([]);
+  const [appointments, setAppointments] = useState([]);
+  const [selectedBusiness, setSelectedBusiness] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [monthDate, setMonthDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalDefaultDate, setModalDefaultDate] = useState(null);
+  const [modalDefaultBiz, setModalDefaultBiz] = useState(null);
+  const [editingAppt, setEditingAppt] = useState(null);
+
+  const [bizMessages, setBizMessages] = useState([]);
+  const [bizPhotos, setBizPhotos] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
+  const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
+  const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
+
+  useEffect(() => { loadAll(); }, []);
+
+  const loadAll = async () => {
+    const { data: biz } = await supabase.from("businesses").select("*").eq("account_manager_id", data.id).order("name");
     if (biz) {
       setBusinesses(biz);
       const ids = biz.map(b => b.id);
       if (ids.length > 0) {
-        const { data: msgs } = await supabase.from("messages").select("*").in("business_id", ids).order("sent_at", { ascending: false });
-        if (msgs) setMessages(msgs);
         const { data: photos } = await supabase.from("photos").select("business_id, status").in("business_id", ids).eq("status", "pending");
         if (photos) {
           const counts = {};
@@ -1261,214 +1641,251 @@ function AccountManagerDashboard({ data, onSignOut }) {
         }
       }
     }
+    const { data: appts } = await supabase.from("appointments").select("*").eq("account_manager_id", data.id).order("starts_at");
+    if (appts) setAppointments(appts);
   };
 
-  const loadManagerChat = async (bizId) => {
+  const businessNameById = businesses.reduce((acc, b) => { acc[b.id] = b.name; return acc; }, {});
+
+  const openScheduleModal = (date, businessId, appt) => {
+    setModalDefaultDate(date || null);
+    setModalDefaultBiz(businessId || (selectedBusiness ? selectedBusiness.id : null));
+    setEditingAppt(appt || null);
+    setModalOpen(true);
+  };
+
+  const handleSaveAppt = async ({ business_id, starts_at, duration_minutes, title, notes }) => {
+    const business = businesses.find(b => b.id === business_id);
+    if (editingAppt) {
+      const { data: updated } = await supabase.from("appointments").update({ business_id, starts_at, duration_minutes, title, notes }).eq("id", editingAppt.id).select().single();
+      if (updated) setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a));
+    } else {
+      const { data: inserted } = await supabase.from("appointments").insert([{
+        business_id, starts_at, duration_minutes, title, notes,
+        account_manager_id: data.id, marketing_company_id: business?.marketing_company_id || null,
+      }]).select().single();
+      if (inserted) setAppointments(prev => [...prev, inserted]);
+    }
+    setModalOpen(false);
+  };
+
+  const handleDeleteAppt = async (id) => {
+    await supabase.from("appointments").delete().eq("id", id);
+    setAppointments(prev => prev.filter(a => a.id !== id));
+    setModalOpen(false);
+  };
+
+  const nextApptFor = (businessId) => {
+    const now = new Date();
+    return appointments.filter(a => a.business_id === businessId && new Date(a.starts_at) >= now).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))[0];
+  };
+
+  const selectBusiness = async (biz) => {
+    setSelectedBusiness(biz);
+    const { data: msgs } = await supabase.from("messages").select("*").eq("business_id", biz.id).order("sent_at", { ascending: false });
+    setBizMessages(msgs || []);
+    const { data: photos } = await supabase.from("photos").select("*").eq("business_id", biz.id);
+    setBizPhotos(photos || []);
+    await loadChat(biz.id);
+  };
+
+  const loadChat = async (bizId) => {
     const { data: msgs } = await supabase.from("chat_messages").select("*").eq("business_id", bizId).order("created_at", { ascending: true });
-    if (msgs) setManagerChatMessages(msgs);
+    setChatMessages(msgs || []);
     await supabase.from("chat_messages").update({ read: true }).eq("business_id", bizId).eq("sender_role", "owner").eq("read", false);
     setUnreadChatByBiz(prev => ({ ...prev, [bizId]: 0 }));
   };
 
-  const sendManagerMessage = async (bizId) => {
-    if (!managerChatInput.trim()) return;
-    setManagerChatSending(true);
-    const msg = { business_id: bizId, sender_role: "manager", sender_name: data.name, message: managerChatInput.trim(), read: false };
+  const sendChat = async () => {
+    if (!chatInput.trim() || !selectedBusiness) return;
+    const msg = { business_id: selectedBusiness.id, sender_role: "manager", sender_name: data.name, message: chatInput.trim(), read: false };
     const { data: inserted } = await supabase.from("chat_messages").insert([msg]).select().single();
-    if (inserted) setManagerChatMessages(prev => [...prev, inserted]);
-    setManagerChatInput("");
-    setManagerChatSending(false);
+    if (inserted) setChatMessages(prev => [...prev, inserted]);
+    setChatInput("");
   };
 
+  const filteredBusinesses = businesses.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.email.toLowerCase().includes(searchQuery.toLowerCase()));
+
+  const todaysAppts = appointments.filter(a => isSameDay(new Date(a.starts_at), new Date())).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text }}>
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, display: "flex" }}>
       <style>{globalCSS}</style>
-      <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 28px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 5, color: C.gold }}>★ REVIEWSEND</div>
-          <div ref={menuRef} style={{ position: "relative" }}>
-            <button onClick={() => setMenuOpen(o => !o)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 4.5 }}>
-              {[0,1,2].map(i => <span key={i} style={{ display: "block", width: 18, height: 1.5, background: C.text, borderRadius: 2 }} />)}
-            </button>
-            {menuOpen && (
-              <div style={{ position: "absolute", right: 0, top: "calc(100% + 10px)", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, minWidth: 230, overflow: "hidden", boxShadow: "0 12px 40px rgba(13,17,23,0.12)" }}>
-                <div style={{ padding: "16px 18px", borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ fontFamily: font.display, fontSize: 14, color: C.text }}>{data.name}</div>
-                  <div style={{ fontFamily: font.body, fontSize: 11, color: C.gold, marginTop: 3, letterSpacing: 2 }}>ACCOUNT MANAGER</div>
-                </div>
-                {[["clients","◈","My Clients"],["analytics","📊","Analytics"]].map(([id,ico,label]) => (
-                  <button key={id} onClick={() => { setTab(id); setMenuOpen(false); setSelectedBusiness(null); }}
-                    style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 18px", background: tab === id ? C.surfaceHover : "none", border: "none", color: tab === id ? C.gold : C.textMuted, cursor: "pointer", fontFamily: font.body, fontSize: 14, textAlign: "left" }}>
-                    <span style={{ fontSize: 11, color: C.gold }}>{ico}</span>{label}
-                  </button>
-                ))}
-                <div style={{ borderTop: `1px solid ${C.border}` }}>
-                  <button onClick={onSignOut} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 18px", background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontFamily: font.body, fontSize: 14, textAlign: "left" }}>→ Sign Out</button>
-                </div>
-              </div>
-            )}
-          </div>
+
+      {modalOpen && (
+        <ScheduleModal
+          businesses={businesses}
+          defaultBusinessId={modalDefaultBiz}
+          defaultDate={modalDefaultDate}
+          editingAppt={editingAppt}
+          onClose={() => setModalOpen(false)}
+          onSave={handleSaveAppt}
+          onDelete={handleDeleteAppt}
+        />
+      )}
+
+      {/* Sidebar */}
+      <div style={{ width: 200, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, padding: "20px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 4, color: C.gold, padding: "0 8px 20px" }}>★ REVIEWSEND</div>
+        {[["calendar", "Calendar"], ["clients", "Clients"], ["photos", "Photos"]].map(([id, label]) => (
+          <button key={id} onClick={() => setView(id)}
+            style={{ display: "flex", alignItems: "center", padding: "10px 12px", borderRadius: 8, border: "none", background: view === id ? "#EEF3FA" : "transparent", color: view === id ? C.gold : C.textMuted, fontFamily: font.body, fontSize: 14, fontWeight: view === id ? 600 : 400, textAlign: "left", cursor: "pointer" }}>
+            {label}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+          <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, padding: "0 8px 8px" }}>{data.name}</div>
+          <button onClick={onSignOut} style={{ width: "100%", textAlign: "left", padding: "10px 12px", background: "none", border: "none", color: C.textMuted, fontFamily: font.body, fontSize: 13, cursor: "pointer" }}>Sign out</button>
         </div>
-      </header>
-      <main style={{ maxWidth: 900, margin: "0 auto", padding: "44px 28px 80px" }}>
-        {selectedBusiness && (
-          <div className="fade-up">
-            <button onClick={() => { setSelectedBusiness(null); setSelectedBizTab("analytics"); }}
-              style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", color: C.gold, cursor: "pointer", fontFamily: font.body, fontSize: 15, marginBottom: 24, padding: 0 }}>
-              ← Back to Clients
-            </button>
-            <div style={{ ...card, marginBottom: 24, padding: "24px 28px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 22, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: font.display, fontSize: 22, color: C.text, fontWeight: 600 }}>{selectedBusiness.name}</div>
-                  <div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted, marginTop: 4 }}>{selectedBusiness.email}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: C.gold }}>{messages.filter(m => m.business_id === selectedBusiness.id).length}</div>
-                  <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>total texts sent</div>
-                </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 32px", borderBottom: `1px solid ${C.border}`, background: C.surface, position: "sticky", top: 0, zIndex: 10 }}>
+          <div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>
+            {view === "calendar" ? "Calendar" : view === "clients" ? "Clients" : "Photos — by client"}
+          </div>
+          <button onClick={() => openScheduleModal(null, null, null)} style={{ ...btnStyle, fontSize: 14 }}>+ Schedule</button>
+        </div>
+
+        <div style={{ padding: 32, maxWidth: 900, margin: "0 auto" }}>
+
+          {view === "calendar" && (
+            <div className="fade-up">
+              <div style={{ ...card, padding: 16, marginBottom: 16, background: "#EEF3FA" }}>
+                {todaysAppts.length === 0 ? (
+                  <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted }}>Nothing on your calendar today.</div>
+                ) : (
+                  <>
+                    <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, color: C.gold, marginBottom: 6 }}>Today — {todaysAppts.length} appointment{todaysAppts.length > 1 ? "s" : ""}</div>
+                    {todaysAppts.map(a => (
+                      <div key={a.id} style={{ fontFamily: font.body, fontSize: 14, color: C.text }}>{fmtTime(new Date(a.starts_at))} · {businessNameById[a.business_id]} — {a.title}</div>
+                    ))}
+                  </>
+                )}
               </div>
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
-                <Label>Enabled Features</Label>
-                <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-                  {[["send","✉️ Review Requests"],["google_posts","📍 Google Posts"],["social","📱 Instagram & Facebook"],["analytics","📊 Analytics"],["history","📋 History"]].map(([key, label]) => {
-                    const currentFeatures = selectedBusiness.features || {};
-                    const isOn = currentFeatures[key] || false;
-                    return (
-                      <button key={key} onClick={async () => {
-                        const newFeatures = { ...currentFeatures, [key]: !isOn };
-                        await supabase.from("businesses").update({ features: newFeatures }).eq("id", selectedBusiness.id);
-                        setSelectedBusiness(b => ({ ...b, features: newFeatures }));
-                        loadData();
-                      }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 99, border: `1.5px solid ${isOn ? C.green : C.border}`, background: isOn ? C.greenBg : C.bg, color: isOn ? C.green : C.textMuted, fontFamily: font.body, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
-                        <span>{isOn ? "✅" : "🔒"}</span> {label}
-                      </button>
-                    );
-                  })}
-                </div>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <button onClick={() => setMonthDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))} style={{ ...ghostBtnStyle, padding: "6px 12px", fontSize: 13 }}>←</button>
+                <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>{monthLabel(monthDate)}</div>
+                <button onClick={() => setMonthDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))} style={{ ...ghostBtnStyle, padding: "6px 12px", fontSize: 13 }}>→</button>
               </div>
+              <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginBottom: 10 }}>Click an empty day to schedule. Click an existing appointment to edit or cancel it.</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => <div key={d} style={{ textAlign: "center", fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{d}</div>)}
+              </div>
+              <CalendarMonthGrid
+                monthDate={monthDate}
+                appointments={appointments}
+                businessNameById={businessNameById}
+                onDayClick={(date) => openScheduleModal(date, null, null)}
+                onApptClick={(appt) => openScheduleModal(null, appt.business_id, appt)}
+              />
             </div>
-            <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}`, flexWrap: "wrap" }}>
-              {[["messages","💬 Messages"],["analytics","📊 Analytics"],["photos","📸 Photos"],["bulk","📤 Bulk Send"],["history","📋 History"],["settings","⚙️ Settings"]].map(([id, label]) => (
-                <button key={id} onClick={() => { setSelectedBizTab(id); if (id === "messages") loadManagerChat(selectedBusiness.id); }}
-                  style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selectedBizTab === id ? C.gold : "none", color: selectedBizTab === id ? "#fff" : C.textMuted, fontFamily: font.body, fontSize: 13, fontWeight: selectedBizTab === id ? 600 : 400, cursor: "pointer", minWidth: 80 }}>
-                  {label}
-                  {id === "messages" && (unreadChatByBiz[selectedBusiness.id] || 0) > 0 && <span style={{ marginLeft: 6, background: "#E85D04", color: "#fff", borderRadius: 99, padding: "1px 6px", fontSize: 10, fontWeight: "bold", fontFamily: font.mono }}>{unreadChatByBiz[selectedBusiness.id]}</span>}
-                </button>
-              ))}
-            </div>
-            {selectedBizTab === "messages" && (
-              <div style={{ padding: "4px 0 16px" }}>
-                <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 300, maxHeight: 480, overflowY: "auto", marginBottom: 16 }}>
-                  {managerChatMessages.filter(m => m.business_id === selectedBusiness.id).map((msg, i) => {
-                    const isManager = msg.sender_role === "manager";
-                    return (
-                      <div key={i} style={{ display: "flex", justifyContent: isManager ? "flex-end" : "flex-start" }}>
-                        <div style={{ maxWidth: "70%", padding: "10px 14px", borderRadius: isManager ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isManager ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : "#F0F4FA", color: isManager ? "#fff" : C.text, fontFamily: font.body, fontSize: 14, lineHeight: 1.5 }}>
-                          {!isManager && <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, marginBottom: 4 }}>{msg.sender_name}</div>}
-                          {msg.message}
-                          <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4 }}>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div style={{ display: "flex", gap: 10 }}>
-                  <input value={managerChatInput} onChange={e => setManagerChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendManagerMessage(selectedBusiness.id)} placeholder={"Message " + selectedBusiness.name + "..."} style={{ flex: 1, padding: "11px 16px", border: `1px solid ${C.border}`, borderRadius: 22, fontFamily: font.body, fontSize: 14, outline: "none", background: C.bg, color: C.text }} />
-                  <button onClick={() => sendManagerMessage(selectedBusiness.id)} disabled={managerChatSending || !managerChatInput.trim()} style={{ padding: "0 20px", borderRadius: 22, background: managerChatInput.trim() ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : C.border, border: "none", cursor: "pointer", color: "#fff", fontFamily: font.body, fontSize: 14, fontWeight: 600 }}>Send</button>
-                </div>
-              </div>
-            )}
-            {selectedBizTab === "analytics" && <AnalyticsTab log={messages.filter(m => m.business_id === selectedBusiness.id)} businessName={selectedBusiness.name} photos={selectedBizPhotos || []} socialLinks={selectedBusiness.social_links || {}} embedded={true} />}
-            {selectedBizTab === "photos" && <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadData} />}
-            {selectedBizTab === "history" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {messages.filter(m => m.business_id === selectedBusiness.id).map((msg, i) => (
-                  <div key={i} style={{ ...card, padding: "16px 20px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center" }}>{msg.customer_name.charAt(0)}</div>
-                        <div>
-                          <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{msg.customer_name}</div>
-                          <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{msg.customer_phone}</div>
-                        </div>
-                      </div>
-                      <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: C.greenBg, color: C.green, border: `1px solid ${C.green}33`, fontWeight: 600 }}>Delivered</span>
+          )}
+
+          {view === "clients" && !selectedBusiness && (
+            <div className="fade-up">
+              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search clients…" style={{ ...inputStyle, marginBottom: 20 }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {filteredBusinesses.map(b => (
+                  <div key={b.id} onClick={() => selectBusiness(b)} style={{ ...card, padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{b.name.charAt(0)}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: font.display, fontSize: 15, fontWeight: 600 }}>{b.name}</div>
+                      <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted }}>{b.email}</div>
                     </div>
-                    <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ fontFamily: font.body, fontSize: 12, padding: "3px 10px", borderRadius: 99, background: msg.platform === "Google" ? "#4A90D918" : "#C0392B18", color: msg.platform === "Google" ? "#4A90D9" : "#e74c3c", border: `1px solid ${msg.platform === "Google" ? "#4A90D933" : "#C0392B33"}`, fontWeight: 600 }}>{msg.platform}</span>
-                      <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{new Date(msg.sent_at).toLocaleDateString()}</div>
-                    </div>
+                    {unreadChatByBiz[b.id] > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#E85D04" }} />}
+                    {pendingPhotosByBiz[b.id] > 0 && <span style={{ background: "#FFF3CD", color: "#856404", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 99 }}>{pendingPhotosByBiz[b.id]} pending</span>}
                   </div>
                 ))}
-                {messages.filter(m => m.business_id === selectedBusiness.id).length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No messages yet.</div>}
+                {filteredBusinesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, textAlign: "center", padding: 40 }}>No clients match.</div>}
               </div>
-            )}
-            {selectedBizTab === "bulk" && <BulkSendTab business={selectedBusiness} onComplete={loadData} />}
-            {selectedBizTab === "settings" && <ClientSettingsTab business={selectedBusiness} onSave={async (links, bizInfo) => { await supabase.from("businesses").update({ social_links: links, ...bizInfo }).eq("id", selectedBusiness.id); setSelectedBusiness(b => ({ ...b, social_links: links, ...bizInfo })); loadData(); }} />}
-          </div>
-        )}
-        {!selectedBusiness && tab === "clients" && (
-          <div className="fade-up">
-            <PageHeader title="My Clients" sub={`${businesses.length} businesses assigned to you`} />
-            <div style={{ position: "relative", marginBottom: 20 }}>
-              <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: C.textMuted }}>🔍</span>
-              <input style={{ ...inputStyle, paddingLeft: 42 }} placeholder="Search..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {businesses.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.email.toLowerCase().includes(searchQuery.toLowerCase())).map(b => {
-                const bizMsgs = messages.filter(m => m.business_id === b.id);
-                const thisMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); });
-                return (
-                  <div key={b.id} onClick={() => { setSelectedBusiness(b); setSelectedBizTab("analytics"); supabase.from("photos").select("*").eq("business_id", b.id).then(({data}) => setSelectedBizPhotos(data || [])); }}
-                    style={{ ...card, padding: "20px 24px", cursor: "pointer", transition: "all 0.2s" }}
-                    onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
-                    onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ position: "relative" }}>
-                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center" }}>{b.name.charAt(0)}</div>
-                          {pendingPhotosByBiz[b.id] > 0 && <div style={{ position: "absolute", top: -4, right: -4, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 10, fontWeight: "bold", border: "2px solid #0D1117" }}>{pendingPhotosByBiz[b.id] > 9 ? "9+" : pendingPhotosByBiz[b.id]}</div>}
-                        </div>
-                        <div>
-                          <div style={{ fontFamily: font.display, fontSize: 16, color: C.text, fontWeight: 600 }}>{b.name}</div>
-                          <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted, marginTop: 3 }}>{b.email}</div>
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        {unreadChatByBiz[b.id] > 0 && <div style={{ background: "#E85D04", color: "#fff", borderRadius: 99, padding: "3px 9px", fontFamily: font.mono, fontSize: 11, fontWeight: "bold" }}>💬 {unreadChatByBiz[b.id]}</div>}
-                        <div style={{ textAlign: "right" }}>
-                          <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: thisMonth.length > 0 ? C.greenBg : "#FFF3CD", color: thisMonth.length > 0 ? C.green : "#856404", border: `1px solid ${thisMonth.length > 0 ? C.green + "33" : "#FFC10733"}`, fontWeight: 600 }}>{thisMonth.length > 0 ? "Active" : "Inactive"}</span>
-                          <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 6 }}>{bizMsgs.length} texts · {thisMonth.length} this month</div>
-                        </div>
-                        <span style={{ color: C.textMuted, fontSize: 20 }}>›</span>
-                      </div>
+          )}
+
+          {view === "clients" && selectedBusiness && (
+            <div className="fade-up">
+              <button onClick={() => setSelectedBusiness(null)} style={{ background: "none", border: "none", color: C.gold, fontFamily: font.body, fontSize: 14, cursor: "pointer", marginBottom: 20, padding: 0 }}>← Back to clients</button>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
+                <div><div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>{selectedBusiness.name}</div><div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{selectedBusiness.email}</div></div>
+              </div>
+              {(() => {
+                const next = nextApptFor(selectedBusiness.id);
+                return <div style={{ fontFamily: font.body, fontSize: 13, color: C.gold, marginBottom: 20 }}>{next ? `Next: ${new Date(next.starts_at).toLocaleDateString([], { month: "short", day: "numeric" })}, ${fmtTime(new Date(next.starts_at))} — ${next.title}` : "No upcoming appointment"}</div>;
+              })()}
+
+              {/* Messages */}
+              <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Messages</div>
+                  {unreadChatByBiz[selectedBusiness.id] > 0 && <span style={{ background: "#E85D04", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>{unreadChatByBiz[selectedBusiness.id]} new</span>}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto", marginBottom: 12 }}>
+                  {chatMessages.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>No messages yet.</div>}
+                  {chatMessages.map((m, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: m.sender_role === "manager" ? "flex-end" : "flex-start" }}>
+                      <div style={{ maxWidth: "75%", padding: "8px 12px", borderRadius: 14, background: m.sender_role === "manager" ? C.gold : "#F0F4FA", color: m.sender_role === "manager" ? "#fff" : C.text, fontFamily: font.body, fontSize: 13 }}>{m.message}</div>
                     </div>
-                  </div>
-                );
-              })}
-              {businesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No clients assigned yet.</div>}
+                  ))}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Message this client…" style={{ ...inputStyle, flex: 1 }} />
+                  <button onClick={sendChat} style={{ ...btnStyle, fontSize: 13, padding: "10px 18px" }}>Send</button>
+                </div>
+              </div>
+
+              <ClientNotesSection businessId={selectedBusiness.id} authorName={data.name} />
+
+              {/* Appointments — filtered to this client */}
+              <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Appointments — this client only</div>
+                  <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>Click a day to schedule</span>
+                </div>
+                <CalendarMonthGrid
+                  monthDate={monthDate}
+                  appointments={appointments}
+                  businessNameById={businessNameById}
+                  filterBusinessId={selectedBusiness.id}
+                  compact
+                  onDayClick={(date) => openScheduleModal(date, selectedBusiness.id, null)}
+                  onApptClick={(appt) => openScheduleModal(null, appt.business_id, appt)}
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadAll} />
+              </div>
+
+              <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                <AnalyticsTab log={bizMessages} businessName={selectedBusiness.name} photos={bizPhotos} socialLinks={selectedBusiness.social_links || {}} embedded={true} />
+              </div>
+
+              <ClientSettingsFull business={selectedBusiness} onSaved={(updated) => setSelectedBusiness(updated)} />
             </div>
-          </div>
-        )}
-        {!selectedBusiness && tab === "analytics" && (
-          <div className="fade-up">
-            <PageHeader title="Analytics" sub="Performance across your assigned clients" />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
-              {[{ value: messages.length, label: "Total Texts Sent", color: C.gold }, { value: businesses.length, label: "Assigned Clients", color: "#4A90D9" }, { value: messages.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length, label: "Sent This Month", color: C.green }].map((s, i) => (
-                <div key={i} style={{ ...card, padding: "20px 16px", textAlign: "center" }}>
-                  <div style={{ fontFamily: font.display, fontSize: 36, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                  <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 8 }}>{s.label}</div>
+          )}
+
+          {view === "photos" && (
+            <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {businesses.map(b => (
+                <div key={b.id} onClick={() => { setView("clients"); selectBusiness(b); }} style={{ ...card, padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{b.name.charAt(0)}</div>
+                  <div style={{ flex: 1, fontFamily: font.display, fontSize: 15, fontWeight: 600 }}>{b.name}</div>
+                  {pendingPhotosByBiz[b.id] > 0 && <span style={{ background: "#FFF3CD", color: "#856404", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 99 }}>{pendingPhotosByBiz[b.id]} pending</span>}
                 </div>
               ))}
             </div>
-          </div>
-        )}
-      </main>
+          )}
+
+        </div>
+      </div>
     </div>
   );
 }
+
 
 // ── BUSINESS APP (Feature 2: send confirmation integrated) ────────────────────
 function BusinessApp({ data, onSignOut, isEmployee = false }) {
