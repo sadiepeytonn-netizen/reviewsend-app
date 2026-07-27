@@ -736,46 +736,54 @@ function SuperAdminDashboard({ onSignOut }) {
 
 
 // ── MARKETING COMPANY DASHBOARD ───────────────────────────────────────────────
+// ── MARKETING COMPANY REBUILD ─────────────────────────────────────────────────
+// Same redesign as the account manager side: one Calendar (here showing every
+// account manager's appointments together, labeled by manager), searchable
+// Clients list, per-client workspace (Messages, Notes, Appointments, Photos,
+// Analytics, full Settings), and a Photos directory grouped by client.
+// Marketing-only additions on top of that: a Managers tab, adding new clients,
+// assigning a client to an account manager, and the Danger Zone delete.
 function MarketingDashboard({ data, onSignOut }) {
+  const [view, setView] = useState("calendar"); // calendar | clients | photos | managers
   const [businesses, setBusinesses] = useState([]);
-  const [messages, setMessages] = useState([]);
   const [accountManagers, setAccountManagers] = useState([]);
-  const [tab, setTab] = useState("clients");
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [showAdd, setShowAdd] = useState(false);
-  const [showAddAM, setShowAddAM] = useState(false);
+  const [appointments, setAppointments] = useState([]);
   const [selectedBusiness, setSelectedBusiness] = useState(null);
-  const [selectedBizTab, setSelectedBizTab] = useState("analytics");
-  const [selectedBizPhotos, setSelectedBizPhotos] = useState([]);
-  const [newBiz, setNewBiz] = useState({ name: "", email: "", google_link: "", yelp_link: "" });
-  const [newAM, setNewAM] = useState({ name: "", email: "" });
-  const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
+  const [monthDate, setMonthDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalDefaultDate, setModalDefaultDate] = useState(null);
+  const [modalDefaultBiz, setModalDefaultBiz] = useState(null);
+  const [editingAppt, setEditingAppt] = useState(null);
+
+  const [showAddClient, setShowAddClient] = useState(false);
+  const [newBiz, setNewBiz] = useState({ name: "", email: "", google_link: "", yelp_link: "" });
+  const [savingClient, setSavingClient] = useState(false);
+
+  const [showAddManager, setShowAddManager] = useState(false);
+  const [newManager, setNewManager] = useState({ name: "", email: "" });
+  const [savingManager, setSavingManager] = useState(false);
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState("");
   const [businessToDelete, setBusinessToDelete] = useState(null);
+
+  const [bizMessages, setBizMessages] = useState([]);
+  const [bizPhotos, setBizPhotos] = useState([]);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState("");
   const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
-  const [managerChatMessages, setManagerChatMessages] = useState([]);
-  const [managerChatInput, setManagerChatInput] = useState("");
-  const [managerChatSending, setManagerChatSending] = useState(false);
-  const menuRef = useRef(null);
+  const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
 
-  useEffect(() => {
-    loadData();
-    const handler = (e) => { if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false); };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  useEffect(() => { loadAll(); }, []);
 
-  const loadData = async () => {
-    const { data: biz } = await supabase.from("businesses").select("*").eq("marketing_company_id", data.id).order("created_at", { ascending: false });
+  const loadAll = async () => {
+    const { data: biz } = await supabase.from("businesses").select("*").eq("marketing_company_id", data.id).order("name");
     if (biz) {
       setBusinesses(biz);
       const ids = biz.map(b => b.id);
       if (ids.length > 0) {
-        const { data: msgs } = await supabase.from("messages").select("*").in("business_id", ids).order("sent_at", { ascending: false });
-        if (msgs) setMessages(msgs);
         const { data: photos } = await supabase.from("photos").select("business_id, status").in("business_id", ids).eq("status", "pending");
         if (photos) {
           const counts = {};
@@ -790,12 +798,81 @@ function MarketingDashboard({ data, onSignOut }) {
         }
       }
     }
-    const { data: ams } = await supabase.from("account_managers").select("*").eq("marketing_company_id", data.id);
+    const { data: ams } = await supabase.from("account_managers").select("*").eq("marketing_company_id", data.id).order("name");
     if (ams) setAccountManagers(ams);
+    const { data: appts } = await supabase.from("appointments").select("*").eq("marketing_company_id", data.id).order("starts_at");
+    if (appts) setAppointments(appts);
+  };
+
+  const businessNameById = businesses.reduce((acc, b) => { acc[b.id] = b.name; return acc; }, {});
+  const managerNameById = accountManagers.reduce((acc, m) => { acc[m.id] = m.name; return acc; }, {});
+
+  const openScheduleModal = (date, businessId, appt) => {
+    setModalDefaultDate(date || null);
+    setModalDefaultBiz(businessId || (selectedBusiness ? selectedBusiness.id : null));
+    setEditingAppt(appt || null);
+    setModalOpen(true);
+  };
+
+  const handleSaveAppt = async ({ business_id, starts_at, duration_minutes, title, notes }) => {
+    const business = businesses.find(b => b.id === business_id);
+    if (editingAppt) {
+      const { data: updated } = await supabase.from("appointments").update({ business_id, starts_at, duration_minutes, title, notes }).eq("id", editingAppt.id).select().single();
+      if (updated) setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a));
+    } else {
+      const { data: inserted } = await supabase.from("appointments").insert([{
+        business_id, starts_at, duration_minutes, title, notes,
+        account_manager_id: business?.account_manager_id || null,
+        marketing_company_id: data.id,
+      }]).select().single();
+      if (inserted) setAppointments(prev => [...prev, inserted]);
+    }
+    setModalOpen(false);
+  };
+
+  const handleDeleteAppt = async (id) => {
+    await supabase.from("appointments").delete().eq("id", id);
+    setAppointments(prev => prev.filter(a => a.id !== id));
+    setModalOpen(false);
+  };
+
+  const nextApptFor = (businessId) => {
+    const now = new Date();
+    return appointments.filter(a => a.business_id === businessId && new Date(a.starts_at) >= now).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))[0];
+  };
+
+  const selectBusiness = async (biz) => {
+    setSelectedBusiness(biz);
+    const { data: msgs } = await supabase.from("messages").select("*").eq("business_id", biz.id).order("sent_at", { ascending: false });
+    setBizMessages(msgs || []);
+    const { data: photos } = await supabase.from("photos").select("*").eq("business_id", biz.id);
+    setBizPhotos(photos || []);
+    await loadChat(biz.id);
+  };
+
+  const loadChat = async (bizId) => {
+    const { data: msgs } = await supabase.from("chat_messages").select("*").eq("business_id", bizId).order("created_at", { ascending: true });
+    setChatMessages(msgs || []);
+    await supabase.from("chat_messages").update({ read: true }).eq("business_id", bizId).eq("sender_role", "owner").eq("read", false);
+    setUnreadChatByBiz(prev => ({ ...prev, [bizId]: 0 }));
+  };
+
+  const sendChat = async () => {
+    if (!chatInput.trim() || !selectedBusiness) return;
+    const msg = { business_id: selectedBusiness.id, sender_role: "manager", sender_name: data.name, message: chatInput.trim(), read: false };
+    const { data: inserted } = await supabase.from("chat_messages").insert([msg]).select().single();
+    if (inserted) setChatMessages(prev => [...prev, inserted]);
+    setChatInput("");
+  };
+
+  const assignToManager = async (bizId, amId) => {
+    await supabase.from("businesses").update({ account_manager_id: amId || null }).eq("id", bizId);
+    setBusinesses(prev => prev.map(b => b.id === bizId ? { ...b, account_manager_id: amId || null } : b));
+    setSelectedBusiness(b => b ? { ...b, account_manager_id: amId || null } : null);
   };
 
   const addBusiness = async () => {
-    setSaving(true);
+    setSavingClient(true);
     const cleanEmail = newBiz.email.trim().toLowerCase();
     await createAuthUser(cleanEmail);
     const { error } = await supabase.from("businesses").insert([{
@@ -808,16 +885,29 @@ function MarketingDashboard({ data, onSignOut }) {
     if (!error) {
       await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: "https://app.reviewsend.io" });
       await sendInviteEmail(cleanEmail, newBiz.name);
-      setShowAdd(false);
+      setShowAddClient(false);
       setNewBiz({ name: "", email: "", google_link: "", yelp_link: "" });
-      loadData();
-      alert("Client created! A password setup email has been sent to " + newBiz.email);
+      loadAll();
+      alert("Client created! A password setup email has been sent to " + cleanEmail);
     } else {
-      if (error.message.includes("duplicate key") || error.message.includes("unique constraint")) {
-        alert("A client with that email address already exists.");
-      } else { alert("Error saving client: " + error.message); }
+      alert(error.message.includes("duplicate key") || error.message.includes("unique constraint") ? "A client with that email address already exists." : "Error saving client: " + error.message);
     }
-    setSaving(false);
+    setSavingClient(false);
+  };
+
+  const addAccountManager = async () => {
+    setSavingManager(true);
+    const { error } = await supabase.from("account_managers").insert([{ name: newManager.name, email: newManager.email, marketing_company_id: data.id }]);
+    if (!error) { setShowAddManager(false); setNewManager({ name: "", email: "" }); loadAll(); }
+    else alert("Error: " + error.message);
+    setSavingManager(false);
+  };
+
+  const removeAccountManager = async (id) => {
+    if (!window.confirm("Remove this account manager? Their assigned clients will become unassigned.")) return;
+    await supabase.from("businesses").update({ account_manager_id: null }).eq("account_manager_id", id);
+    await supabase.from("account_managers").delete().eq("id", id);
+    loadAll();
   };
 
   const confirmDeleteClient = async () => {
@@ -830,390 +920,290 @@ function MarketingDashboard({ data, onSignOut }) {
     await supabase.from("photos").delete().eq("business_id", businessToDelete.id);
     await supabase.from("bulk_sends").delete().eq("business_id", businessToDelete.id);
     await supabase.from("employees").delete().eq("business_id", businessToDelete.id);
+    await supabase.from("appointments").delete().eq("business_id", businessToDelete.id);
+    await supabase.from("client_notes").delete().eq("business_id", businessToDelete.id);
     await supabase.from("businesses").delete().eq("id", businessToDelete.id);
     if (businessToDelete.email) await deleteAuthUser(businessToDelete.email);
     setShowDeleteModal(false); setDeleteConfirmText(""); setBusinessToDelete(null);
-    setSelectedBusiness(null); setSelectedBizTab("analytics");
-    loadData();
+    setSelectedBusiness(null);
+    loadAll();
   };
 
-  const loadManagerChat = async (bizId) => {
-    const { data: msgs } = await supabase.from("chat_messages").select("*").eq("business_id", bizId).order("created_at", { ascending: true });
-    if (msgs) setManagerChatMessages(msgs);
-    await supabase.from("chat_messages").update({ read: true }).eq("business_id", bizId).eq("sender_role", "owner").eq("read", false);
-    setUnreadChatByBiz(prev => ({ ...prev, [bizId]: 0 }));
-  };
-
-  const sendManagerMessage = async (bizId) => {
-    if (!managerChatInput.trim()) return;
-    setManagerChatSending(true);
-    const msg = { business_id: bizId, sender_role: "manager", sender_name: "Account Manager", message: managerChatInput.trim(), read: false };
-    const { data: inserted } = await supabase.from("chat_messages").insert([msg]).select().single();
-    if (inserted) setManagerChatMessages(prev => [...prev, inserted]);
-    setManagerChatInput("");
-    setManagerChatSending(false);
-  };
-
-  const addAccountManager = async () => {
-    setSaving(true);
-    const { error } = await supabase.from("account_managers").insert([{ name: newAM.name, email: newAM.email, marketing_company_id: data.id }]);
-    if (!error) { setShowAddAM(false); setNewAM({ name: "", email: "" }); loadData(); }
-    setSaving(false);
-  };
-
-  const assignToManager = async (bizId, amId) => {
-    await supabase.from("businesses").update({ account_manager_id: amId || null }).eq("id", bizId);
-    loadData();
-    setSelectedBusiness(b => b ? { ...b, account_manager_id: amId || null } : null);
-  };
-
-  const removeAccountManager = async (id) => {
-    await supabase.from("account_managers").delete().eq("id", id);
-    loadData();
-  };
-
-  // Shared sub-tabs renderer for selected business
-  const renderBizSubTab = () => {
-    if (!selectedBusiness) return null;
-    if (selectedBizTab === "messages") return (
-      <div style={{ padding: "4px 0 16px" }}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 10, minHeight: 300, maxHeight: 480, overflowY: "auto", marginBottom: 16 }}>
-          {managerChatMessages.filter(m => m.business_id === selectedBusiness.id).length === 0 && (
-            <div style={{ textAlign: "center", padding: "40px 20px", color: C.textMuted, fontFamily: font.body, fontSize: 14 }}>No messages yet. Send a message to start the conversation.</div>
-          )}
-          {managerChatMessages.filter(m => m.business_id === selectedBusiness.id).map((msg, i) => {
-            const isManager = msg.sender_role === "manager";
-            return (
-              <div key={i} style={{ display: "flex", justifyContent: isManager ? "flex-end" : "flex-start" }}>
-                <div style={{ maxWidth: "70%", padding: "10px 14px", borderRadius: isManager ? "18px 18px 4px 18px" : "18px 18px 18px 4px", background: isManager ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : "#F0F4FA", color: isManager ? "#fff" : C.text, fontFamily: font.body, fontSize: 14, lineHeight: 1.5 }}>
-                  {!isManager && <div style={{ fontSize: 11, fontWeight: 700, color: C.gold, marginBottom: 4 }}>{msg.sender_name || selectedBusiness.name}</div>}
-                  {msg.message}
-                  <div style={{ fontSize: 10, opacity: 0.6, marginTop: 4, textAlign: isManager ? "right" : "left" }}>{new Date(msg.created_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ display: "flex", gap: 10 }}>
-          <input value={managerChatInput} onChange={e => setManagerChatInput(e.target.value)}
-            onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendManagerMessage(selectedBusiness.id)}
-            placeholder={"Message " + selectedBusiness.name + "..."}
-            style={{ flex: 1, padding: "11px 16px", border: `1px solid ${C.border}`, borderRadius: 22, fontFamily: font.body, fontSize: 14, outline: "none", background: C.bg, color: C.text }} />
-          <button onClick={() => sendManagerMessage(selectedBusiness.id)} disabled={managerChatSending || !managerChatInput.trim()}
-            style={{ padding: "0 20px", borderRadius: 22, background: managerChatInput.trim() ? "linear-gradient(135deg, #1A5FBF, #0d3d8a)" : C.border, border: "none", cursor: managerChatInput.trim() ? "pointer" : "default", color: "#fff", fontFamily: font.body, fontSize: 14, fontWeight: 600 }}>
-            Send
-          </button>
-        </div>
-      </div>
-    );
-    if (selectedBizTab === "analytics") return <AnalyticsTab log={messages.filter(m => m.business_id === selectedBusiness.id)} businessName={selectedBusiness.name} photos={selectedBizPhotos || []} socialLinks={selectedBusiness.social_links || {}} embedded={true} />;
-    if (selectedBizTab === "photos") return <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadData} />;
-    if (selectedBizTab === "history") return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {messages.filter(m => m.business_id === selectedBusiness.id).map((msg, i) => (
-          <div key={i} style={{ ...card, padding: "16px 20px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 36, height: 36, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{msg.customer_name.charAt(0)}</div>
-                <div>
-                  <div style={{ fontFamily: font.display, fontSize: 15, color: C.text, fontWeight: 600 }}>{msg.customer_name}</div>
-                  <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{msg.customer_phone}</div>
-                </div>
-              </div>
-              <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: C.greenBg, color: C.green, border: `1px solid ${C.green}33`, fontWeight: 600 }}>Delivered</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontFamily: font.body, fontSize: 12, padding: "3px 10px", borderRadius: 99, background: msg.platform === "Google" ? "#4A90D918" : "#C0392B18", color: msg.platform === "Google" ? "#4A90D9" : "#e74c3c", border: `1px solid ${msg.platform === "Google" ? "#4A90D933" : "#C0392B33"}`, fontWeight: 600 }}>{msg.platform}</span>
-              <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{new Date(msg.sent_at).toLocaleDateString()}</div>
-            </div>
-          </div>
-        ))}
-        {messages.filter(m => m.business_id === selectedBusiness.id).length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No messages sent yet.</div>}
-      </div>
-    );
-    if (selectedBizTab === "bulk") return <BulkSendTab business={selectedBusiness} onComplete={loadData} />;
-    if (selectedBizTab === "settings") return (
-      <div>
-        <ClientSettingsTab business={selectedBusiness} onSave={async (links, bizInfo) => {
-          await supabase.from("businesses").update({ social_links: links, ...bizInfo }).eq("id", selectedBusiness.id);
-          setSelectedBusiness(b => ({ ...b, social_links: links, ...bizInfo }));
-          loadData();
-        }} />
-        <div style={{ marginTop: 32, paddingTop: 24, borderTop: "1px solid #ffcccc" }}>
-          <div style={{ fontFamily: font.display, fontSize: 16, color: "#cc0000", marginBottom: 8 }}>Danger Zone</div>
-          <p style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Permanently delete this client and all their data. This cannot be undone.</p>
-          <button onClick={() => { setBusinessToDelete(selectedBusiness); setDeleteConfirmText(""); setShowDeleteModal(true); }}
-            style={{ padding: "10px 24px", background: "transparent", color: "#cc0000", border: "1.5px solid #cc0000", borderRadius: 8, fontFamily: font.body, fontSize: 14, fontWeight: 600, cursor: "pointer" }}>
-            Delete Client
-          </button>
-        </div>
-      </div>
-    );
-    return null;
-  };
+  const filteredBusinesses = businesses.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.email.toLowerCase().includes(searchQuery.toLowerCase()));
+  const todaysAppts = appointments.filter(a => isSameDay(new Date(a.starts_at), new Date())).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, color: C.text }}>
+    <div style={{ minHeight: "100vh", background: C.bg, color: C.text, display: "flex" }}>
       <style>{globalCSS}</style>
-      <header style={{ background: C.surface, borderBottom: `1px solid ${C.border}`, position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ maxWidth: 900, margin: "0 auto", padding: "0 28px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 5, color: C.gold }}>★ REVIEWSEND</div>
-          <div ref={menuRef} style={{ position: "relative" }}>
-            <button onClick={() => setMenuOpen(o => !o)} style={{ background: "none", border: `1px solid ${C.border}`, borderRadius: 8, cursor: "pointer", padding: "8px 10px", display: "flex", flexDirection: "column", gap: 4.5 }}>
-              {[0,1,2].map(i => <span key={i} style={{ display: "block", width: 18, height: 1.5, background: C.text, borderRadius: 2 }} />)}
-            </button>
-            {menuOpen && (
-              <div style={{ position: "absolute", right: 0, top: "calc(100% + 10px)", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, minWidth: 230, overflow: "hidden", boxShadow: "0 12px 40px rgba(13,17,23,0.12)" }}>
-                <div style={{ padding: "14px 18px", borderBottom: `1px solid ${C.border}` }}>
-                  <div style={{ fontFamily: font.display, fontSize: 14, color: C.text }}>{data.name}</div>
-                  <div style={{ fontFamily: font.body, fontSize: 11, color: C.gold, marginTop: 2, letterSpacing: 2 }}>MARKETING PARTNER</div>
-                </div>
-                {[["clients","◈","My Clients"],["managers","👥","Account Managers"],["analytics","📊","Analytics"]].map(([id,ico,label]) => (
-                  <button key={id} onClick={() => { setTab(id); setMenuOpen(false); setSelectedBusiness(null); }}
-                    style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 18px", background: tab === id ? C.surfaceHover : "none", border: "none", color: tab === id ? C.gold : C.textMuted, cursor: "pointer", fontFamily: font.body, fontSize: 14, textAlign: "left" }}>
-                    <span style={{ fontSize: 11, color: C.gold }}>{ico}</span>{label}
-                  </button>
-                ))}
-                <div style={{ borderTop: `1px solid ${C.border}` }}>
-                  <button onClick={onSignOut} style={{ display: "flex", alignItems: "center", gap: 10, width: "100%", padding: "13px 18px", background: "none", border: "none", color: C.textMuted, cursor: "pointer", fontFamily: font.body, fontSize: 14, textAlign: "left" }}>→ Sign Out</button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-      <main style={{ maxWidth: 900, margin: "0 auto", padding: "44px 28px 80px" }}>
-        {/* Delete modal */}
-        {showDeleteModal && businessToDelete && (
-          <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-            <div style={{ background: "#fff", borderRadius: 16, padding: 32, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-              <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 700, color: "#cc0000", marginBottom: 8 }}>Delete Client</div>
-              <p style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, lineHeight: 1.6, marginBottom: 24 }}>
-                This will permanently delete <strong>{businessToDelete.name}</strong> and all their data. This cannot be undone.
-              </p>
-              <div style={{ background: "#fff5f5", border: "1px solid #ffcccc", borderRadius: 8, padding: 16, marginBottom: 24 }}>
-                <div style={{ fontFamily: font.body, fontSize: 12, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted, marginBottom: 8 }}>Type the business name to confirm:</div>
-                <div style={{ fontFamily: font.body, fontSize: 13, color: "#cc0000", fontWeight: 700, marginBottom: 10 }}>{businessToDelete.name}</div>
-                <input value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)} placeholder={businessToDelete.name}
-                  style={{ width: "100%", padding: "10px 14px", border: "1.5px solid #ffaaaa", borderRadius: 8, fontFamily: font.body, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
-              </div>
-              <div style={{ display: "flex", gap: 12 }}>
-                <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); setBusinessToDelete(null); }}
-                  style={{ flex: 1, padding: "11px", background: "transparent", border: `1.5px solid ${C.border}`, borderRadius: 8, fontFamily: font.body, fontSize: 14, fontWeight: 600, cursor: "pointer", color: C.textMuted }}>Cancel</button>
-                <button onClick={confirmDeleteClient}
-                  disabled={deleteConfirmText.trim().toLowerCase() !== businessToDelete.name.trim().toLowerCase()}
-                  style={{ flex: 1, padding: "11px", background: deleteConfirmText.trim().toLowerCase() === businessToDelete.name.trim().toLowerCase() ? "#cc0000" : "#ffaaaa", border: "none", borderRadius: 8, fontFamily: font.body, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff" }}>
-                  🗑️ Permanently Delete
-                </button>
-              </div>
+
+      {modalOpen && (
+        <ScheduleModal
+          businesses={businesses}
+          defaultBusinessId={modalDefaultBiz}
+          defaultDate={modalDefaultDate}
+          editingAppt={editingAppt}
+          onClose={() => setModalOpen(false)}
+          onSave={handleSaveAppt}
+          onDelete={handleDeleteAppt}
+        />
+      )}
+
+      {showDeleteModal && businessToDelete && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 32, maxWidth: 440, width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 700, color: "#cc0000", marginBottom: 8 }}>Delete Client</div>
+            <p style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, lineHeight: 1.6, marginBottom: 24 }}>This will permanently delete <strong>{businessToDelete.name}</strong> and all their data. This cannot be undone.</p>
+            <div style={{ background: "#fff5f5", border: "1px solid #ffcccc", borderRadius: 8, padding: 16, marginBottom: 24 }}>
+              <div style={{ fontFamily: font.body, fontSize: 12, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: C.textMuted, marginBottom: 8 }}>Type the business name to confirm:</div>
+              <div style={{ fontFamily: font.body, fontSize: 13, color: "#cc0000", fontWeight: 700, marginBottom: 10 }}>{businessToDelete.name}</div>
+              <input value={deleteConfirmText} onChange={e => setDeleteConfirmText(e.target.value)} placeholder={businessToDelete.name} style={{ ...inputStyle, boxSizing: "border-box" }} />
+            </div>
+            <div style={{ display: "flex", gap: 12 }}>
+              <button onClick={() => { setShowDeleteModal(false); setDeleteConfirmText(""); setBusinessToDelete(null); }} style={{ ...ghostBtnStyle, flex: 1 }}>Cancel</button>
+              <button onClick={confirmDeleteClient} disabled={deleteConfirmText.trim().toLowerCase() !== businessToDelete.name.trim().toLowerCase()}
+                style={{ flex: 1, padding: "11px", background: deleteConfirmText.trim().toLowerCase() === businessToDelete.name.trim().toLowerCase() ? "#cc0000" : "#ffaaaa", border: "none", borderRadius: 8, fontFamily: font.body, fontSize: 14, fontWeight: 600, cursor: "pointer", color: "#fff" }}>
+                Permanently Delete
+              </button>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Business detail view */}
-        {selectedBusiness && (
-          <div className="fade-up">
-            <button onClick={() => { setSelectedBusiness(null); setSelectedBizTab("analytics"); }}
-              style={{ display: "flex", alignItems: "center", gap: 8, background: "none", border: "none", color: C.gold, cursor: "pointer", fontFamily: font.body, fontSize: 15, marginBottom: 24, padding: 0 }}>
-              ← Back to Clients
-            </button>
-            <div style={{ ...card, marginBottom: 24, padding: "24px 28px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
-                <div style={{ width: 52, height: 52, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 22, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{selectedBusiness.name.charAt(0)}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontFamily: font.display, fontSize: 22, color: C.text, fontWeight: 600 }}>{selectedBusiness.name}</div>
-                  <div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted, marginTop: 4 }}>{selectedBusiness.email}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: C.gold }}>{messages.filter(m => m.business_id === selectedBusiness.id).length}</div>
-                  <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>total texts sent</div>
-                </div>
+      {/* Sidebar */}
+      <div style={{ width: 200, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, padding: "20px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
+        <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 4, color: C.gold, padding: "0 8px 20px" }}>★ REVIEWSEND</div>
+        {[["calendar", "Calendar"], ["clients", "Clients"], ["photos", "Photos"], ["managers", "Managers"]].map(([id, label]) => (
+          <button key={id} onClick={() => setView(id)}
+            style={{ display: "flex", alignItems: "center", padding: "10px 12px", borderRadius: 8, border: "none", background: view === id ? "#EEF3FA" : "transparent", color: view === id ? C.gold : C.textMuted, fontFamily: font.body, fontSize: 14, fontWeight: view === id ? 600 : 400, textAlign: "left", cursor: "pointer" }}>
+            {label}
+          </button>
+        ))}
+        <div style={{ flex: 1 }} />
+        <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
+          <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, padding: "0 8px 8px" }}>{data.name}</div>
+          <button onClick={onSignOut} style={{ width: "100%", textAlign: "left", padding: "10px 12px", background: "none", border: "none", color: C.textMuted, fontFamily: font.body, fontSize: 13, cursor: "pointer" }}>Sign out</button>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 32px", borderBottom: `1px solid ${C.border}`, background: C.surface, position: "sticky", top: 0, zIndex: 10 }}>
+          <div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>
+            {view === "calendar" ? "Calendar — every account manager" : view === "clients" ? "Clients" : view === "photos" ? "Photos — by client" : "Account Managers"}
+          </div>
+          {view === "clients" && !selectedBusiness && <button onClick={() => setShowAddClient(true)} style={{ ...btnStyle, fontSize: 14 }}>+ Add Client</button>}
+          {view === "managers" && <button onClick={() => setShowAddManager(true)} style={{ ...btnStyle, fontSize: 14 }}>+ Add Manager</button>}
+          {(view === "calendar" || (view === "clients" && selectedBusiness)) && <button onClick={() => openScheduleModal(null, null, null)} style={{ ...btnStyle, fontSize: 14 }}>+ Schedule</button>}
+        </div>
+
+        <div style={{ padding: 32, maxWidth: 900, margin: "0 auto" }}>
+
+          {view === "calendar" && (
+            <div className="fade-up">
+              <div style={{ ...card, padding: 16, marginBottom: 16, background: "#EEF3FA" }}>
+                {todaysAppts.length === 0 ? (
+                  <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted }}>Nothing on the calendar today.</div>
+                ) : (
+                  <>
+                    <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, color: C.gold, marginBottom: 6 }}>Today — {todaysAppts.length} appointment{todaysAppts.length > 1 ? "s" : ""}</div>
+                    {todaysAppts.map(a => (
+                      <div key={a.id} style={{ fontFamily: font.body, fontSize: 14, color: C.text }}>
+                        {fmtTime(new Date(a.starts_at))} · {businessNameById[a.business_id]} — {a.title}
+                        {managerNameById[a.account_manager_id] && <span style={{ color: C.textMuted }}> ({managerNameById[a.account_manager_id]})</span>}
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
-              <div style={{ marginTop: 20, paddingTop: 20, borderTop: `1px solid ${C.border}` }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <button onClick={() => setMonthDate(d => new Date(d.getFullYear(), d.getMonth() - 1, 1))} style={{ ...ghostBtnStyle, padding: "6px 12px", fontSize: 13 }}>←</button>
+                <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>{monthLabel(monthDate)}</div>
+                <button onClick={() => setMonthDate(d => new Date(d.getFullYear(), d.getMonth() + 1, 1))} style={{ ...ghostBtnStyle, padding: "6px 12px", fontSize: 13 }}>→</button>
+              </div>
+              <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginBottom: 10 }}>Every account manager's appointments, in one place — labeled by manager. Click an empty day to schedule, click an appointment to edit or cancel it.</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 4 }}>
+                {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => <div key={d} style={{ textAlign: "center", fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{d}</div>)}
+              </div>
+              <CalendarMonthGrid
+                monthDate={monthDate}
+                appointments={appointments}
+                businessNameById={businessNameById}
+                managerNameById={managerNameById}
+                onDayClick={(date) => openScheduleModal(date, null, null)}
+                onApptClick={(appt) => openScheduleModal(null, appt.business_id, appt)}
+              />
+            </div>
+          )}
+
+          {view === "clients" && !selectedBusiness && (
+            <div className="fade-up">
+              {showAddClient && (
+                <div style={{ ...card, marginBottom: 20 }}>
+                  <div style={{ fontFamily: font.display, fontSize: 18, marginBottom: 16 }}>New Client Business</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+                    <div><Label>Business Name</Label><input style={inputStyle} value={newBiz.name} onChange={e => setNewBiz(d => ({ ...d, name: e.target.value }))} placeholder="Joe's Restaurant" /></div>
+                    <div><Label>Login Email</Label><input style={inputStyle} value={newBiz.email} onChange={e => setNewBiz(d => ({ ...d, email: e.target.value }))} placeholder="joe@restaurant.com" /></div>
+                    <div><Label>Google Review Link</Label><input style={inputStyle} value={newBiz.google_link} onChange={e => setNewBiz(d => ({ ...d, google_link: e.target.value }))} placeholder="https://g.page/r/..." /></div>
+                    <div><Label>Yelp Review Link</Label><input style={inputStyle} value={newBiz.yelp_link} onChange={e => setNewBiz(d => ({ ...d, yelp_link: e.target.value }))} placeholder="https://www.yelp.com/biz/..." /></div>
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={addBusiness} disabled={savingClient} style={btnStyle}>{savingClient ? "Saving…" : "Create Client"}</button>
+                    <button onClick={() => setShowAddClient(false)} style={ghostBtnStyle}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search clients…" style={{ ...inputStyle, marginBottom: 20 }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                {filteredBusinesses.map(b => (
+                  <div key={b.id} onClick={() => selectBusiness(b)} style={{ ...card, padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{b.name.charAt(0)}</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontFamily: font.display, fontSize: 15, fontWeight: 600 }}>{b.name}</div>
+                      <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted }}>{b.email}</div>
+                      {managerNameById[b.account_manager_id] && <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 2 }}>👤 {managerNameById[b.account_manager_id]}</div>}
+                    </div>
+                    {unreadChatByBiz[b.id] > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#E85D04" }} />}
+                    {pendingPhotosByBiz[b.id] > 0 && <span style={{ background: "#FFF3CD", color: "#856404", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 99 }}>{pendingPhotosByBiz[b.id]} pending</span>}
+                  </div>
+                ))}
+                {filteredBusinesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, textAlign: "center", padding: 40 }}>{searchQuery ? "No clients match." : "No clients yet. Add one above!"}</div>}
+              </div>
+            </div>
+          )}
+
+          {view === "clients" && selectedBusiness && (
+            <div className="fade-up">
+              <button onClick={() => setSelectedBusiness(null)} style={{ background: "none", border: "none", color: C.gold, fontFamily: font.body, fontSize: 14, cursor: "pointer", marginBottom: 20, padding: 0 }}>← Back to clients</button>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
+                <div><div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>{selectedBusiness.name}</div><div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{selectedBusiness.email}</div></div>
+              </div>
+              {(() => {
+                const next = nextApptFor(selectedBusiness.id);
+                return <div style={{ fontFamily: font.body, fontSize: 13, color: C.gold, marginBottom: 12 }}>{next ? `Next: ${new Date(next.starts_at).toLocaleDateString([], { month: "short", day: "numeric" })}, ${fmtTime(new Date(next.starts_at))} — ${next.title}` : "No upcoming appointment"}</div>;
+              })()}
+
+              <div style={{ marginBottom: 20 }}>
                 <Label>Assigned Account Manager</Label>
-                <select style={{ ...inputStyle, marginTop: 4 }} value={selectedBusiness.account_manager_id || ""} onChange={e => assignToManager(selectedBusiness.id, e.target.value)}>
+                <select value={selectedBusiness.account_manager_id || ""} onChange={e => assignToManager(selectedBusiness.id, e.target.value)} style={inputStyle}>
                   <option value="">Unassigned</option>
                   {accountManagers.map(am => <option key={am.id} value={am.id}>{am.name}</option>)}
                 </select>
               </div>
-              <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
-                <Label>Enabled Features</Label>
-                <div style={{ display: "flex", gap: 10, marginTop: 8, flexWrap: "wrap" }}>
-                  {[["send","✉️ Review Requests"],["google_posts","📍 Google Posts"],["social","📱 Instagram & Facebook"],["analytics","📊 Analytics"],["history","📋 History"]].map(([key, label]) => {
-                    const currentFeatures = selectedBusiness.features || {};
-                    const isOn = currentFeatures[key] || false;
-                    return (
-                      <button key={key} onClick={async () => {
-                        const newFeatures = { ...currentFeatures, [key]: !isOn };
-                        await supabase.from("businesses").update({ features: newFeatures }).eq("id", selectedBusiness.id);
-                        setSelectedBusiness(b => ({ ...b, features: newFeatures }));
-                        loadData();
-                      }} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 16px", borderRadius: 99, border: `1.5px solid ${isOn ? C.green : C.border}`, background: isOn ? C.greenBg : C.bg, color: isOn ? C.green : C.textMuted, fontFamily: font.body, fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.2s" }}>
-                        <span>{isOn ? "✅" : "🔒"}</span> {label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-            <div style={{ display: "flex", gap: 2, marginBottom: 24, background: C.surface, borderRadius: 10, padding: 4, border: `1px solid ${C.border}`, flexWrap: "wrap" }}>
-              {[["messages","💬 Messages"],["analytics","📊 Analytics"],["photos","📸 Photos"],["bulk","📤 Bulk Send"],["history","📋 History"],["settings","⚙️ Settings"]].map(([id, label]) => {
-                const chatCount = id === "messages" ? (unreadChatByBiz[selectedBusiness?.id] || 0) : 0;
-                return (
-                  <button key={id} onClick={() => { setSelectedBizTab(id); if (id === "messages") loadManagerChat(selectedBusiness.id); }}
-                    style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: selectedBizTab === id ? C.gold : "none", color: selectedBizTab === id ? "#fff" : C.textMuted, fontFamily: font.body, fontSize: 13, fontWeight: selectedBizTab === id ? 600 : 400, cursor: "pointer", minWidth: 80, position: "relative" }}>
-                    {label}
-                    {chatCount > 0 && <span style={{ marginLeft: 6, background: "#E85D04", color: "#fff", borderRadius: 99, padding: "1px 6px", fontSize: 10, fontWeight: "bold", fontFamily: font.mono }}>{chatCount}</span>}
-                  </button>
-                );
-              })}
-            </div>
-            {renderBizSubTab()}
-          </div>
-        )}
 
-        {/* Clients list */}
-        {!selectedBusiness && tab === "clients" && (
-          <div className="fade-up">
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 24 }}>
-              <PageHeader title="My Clients" sub={`${businesses.length} businesses`} />
-              <button onClick={() => setShowAdd(true)} style={{ ...btnStyle, marginTop: 8 }}>+ Add Client</button>
-            </div>
-            <div style={{ position: "relative", marginBottom: 20 }}>
-              <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", fontSize: 16, color: C.textMuted }}>🔍</span>
-              <input style={{ ...inputStyle, paddingLeft: 42 }} placeholder="Search by business name or email..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-            </div>
-            {showAdd && (
-              <div style={{ ...card, marginBottom: 24 }}>
-                <div style={{ fontFamily: font.display, fontSize: 18, marginBottom: 20, color: C.text }}>New Client Business</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-                  <div><Label>Business Name</Label><input style={inputStyle} value={newBiz.name} onChange={e => setNewBiz(d => ({...d, name: e.target.value}))} placeholder="Joe's Restaurant" /></div>
-                  <div><Label>Login Email</Label><input style={inputStyle} value={newBiz.email} onChange={e => setNewBiz(d => ({...d, email: e.target.value}))} placeholder="joe@restaurant.com" /></div>
-                  <div><Label>Google Review Link</Label><input style={inputStyle} value={newBiz.google_link} onChange={e => setNewBiz(d => ({...d, google_link: e.target.value}))} placeholder="https://g.page/r/..." /></div>
-                  <div><Label>Yelp Review Link</Label><input style={inputStyle} value={newBiz.yelp_link} onChange={e => setNewBiz(d => ({...d, yelp_link: e.target.value}))} placeholder="https://www.yelp.com/biz/..." /></div>
+              {/* Messages */}
+              <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Messages</div>
+                  {unreadChatByBiz[selectedBusiness.id] > 0 && <span style={{ background: "#E85D04", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>{unreadChatByBiz[selectedBusiness.id]} new</span>}
                 </div>
-                <div style={{ display: "flex", gap: 12 }}>
-                  <button onClick={addBusiness} disabled={saving} style={{ ...btnStyle }}>{saving ? "Saving…" : "Create Client"}</button>
-                  <button onClick={() => setShowAdd(false)} style={{ ...ghostBtnStyle }}>Cancel</button>
-                </div>
-              </div>
-            )}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {businesses.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.email.toLowerCase().includes(searchQuery.toLowerCase())).map(b => {
-                const bizMsgs = messages.filter(m => m.business_id === b.id);
-                const thisMonth = bizMsgs.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); });
-                const isActive = thisMonth.length > 0;
-                const assignedAM = accountManagers.find(am => am.id === b.account_manager_id);
-                return (
-                  <div key={b.id} onClick={() => { setSelectedBusiness(b); setSelectedBizTab("analytics"); supabase.from("photos").select("*").eq("business_id", b.id).then(({data}) => setSelectedBizPhotos(data || [])); }}
-                    style={{ ...card, padding: "20px 24px", cursor: "pointer", transition: "all 0.2s" }}
-                    onMouseEnter={e => e.currentTarget.style.transform = "translateY(-2px)"}
-                    onMouseLeave={e => e.currentTarget.style.transform = "translateY(0)"}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ position: "relative" }}>
-                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{b.name.charAt(0)}</div>
-                          {pendingPhotosByBiz[b.id] > 0 && <div style={{ position: "absolute", top: -4, right: -4, background: "#E85D04", color: "#fff", borderRadius: "50%", width: 18, height: 18, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: font.mono, fontSize: 10, fontWeight: "bold", border: "2px solid #0D1117" }}>{pendingPhotosByBiz[b.id] > 9 ? "9+" : pendingPhotosByBiz[b.id]}</div>}
-                        </div>
-                        <div>
-                          <div style={{ fontFamily: font.display, fontSize: 16, color: C.text, fontWeight: 600 }}>{b.name}</div>
-                          <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted, marginTop: 3 }}>{b.email}</div>
-                          {assignedAM && <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 3 }}>👤 {assignedAM.name}</div>}
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        {unreadChatByBiz[b.id] > 0 && <div style={{ background: "#E85D04", color: "#fff", borderRadius: 99, padding: "3px 9px", fontFamily: font.mono, fontSize: 11, fontWeight: "bold" }}>💬 {unreadChatByBiz[b.id]}</div>}
-                        <div style={{ textAlign: "right" }}>
-                          <span style={{ fontFamily: font.body, fontSize: 11, padding: "3px 10px", borderRadius: 99, background: isActive ? C.greenBg : "#FFF3CD", color: isActive ? C.green : "#856404", border: `1px solid ${isActive ? C.green + "33" : "#FFC10733"}`, fontWeight: 600 }}>{isActive ? "Active" : "Inactive"}</span>
-                          <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 6 }}>{bizMsgs.length} texts · {thisMonth.length} this month</div>
-                        </div>
-                        <span style={{ color: C.textMuted, fontSize: 20 }}>›</span>
-                      </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto", marginBottom: 12 }}>
+                  {chatMessages.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>No messages yet.</div>}
+                  {chatMessages.map((m, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: m.sender_role === "manager" ? "flex-end" : "flex-start" }}>
+                      <div style={{ maxWidth: "75%", padding: "8px 12px", borderRadius: 14, background: m.sender_role === "manager" ? C.gold : "#F0F4FA", color: m.sender_role === "manager" ? "#fff" : C.text, fontFamily: font.body, fontSize: 13 }}>{m.message}</div>
                     </div>
-                  </div>
-                );
-              })}
-              {businesses.filter(b => b.name.toLowerCase().includes(searchQuery.toLowerCase()) || b.email.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 && (
-                <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>{searchQuery ? `No clients found for "${searchQuery}"` : "No clients yet. Add one above!"}</div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* Account managers */}
-        {!selectedBusiness && tab === "managers" && (
-          <div className="fade-up">
-            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 36 }}>
-              <PageHeader title="Account Managers" sub={`${accountManagers.length} managers`} />
-              <button onClick={() => setShowAddAM(true)} style={{ ...btnStyle, marginTop: 8 }}>+ Add Manager</button>
-            </div>
-            {showAddAM && (
-              <div style={{ ...card, marginBottom: 24 }}>
-                <div style={{ fontFamily: font.display, fontSize: 18, marginBottom: 20, color: C.text }}>New Account Manager</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-                  <div><Label>Full Name</Label><input style={inputStyle} value={newAM.name} onChange={e => setNewAM(d => ({...d, name: e.target.value}))} placeholder="John Smith" /></div>
-                  <div><Label>Email</Label><input style={inputStyle} value={newAM.email} onChange={e => setNewAM(d => ({...d, email: e.target.value}))} placeholder="john@yourcompany.com" /></div>
+                  ))}
                 </div>
-                <div style={{ display: "flex", gap: 12 }}>
-                  <button onClick={addAccountManager} disabled={saving} style={{ ...btnStyle }}>{saving ? "Saving…" : "Add Manager"}</button>
-                  <button onClick={() => setShowAddAM(false)} style={{ ...ghostBtnStyle }}>Cancel</button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Message this client…" style={{ ...inputStyle, flex: 1 }} />
+                  <button onClick={sendChat} style={{ ...btnStyle, fontSize: 13, padding: "10px 18px" }}>Send</button>
                 </div>
               </div>
-            )}
-            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {accountManagers.map(am => {
-                const assignedClients = businesses.filter(b => b.account_manager_id === am.id);
-                return (
-                  <div key={am.id} style={{ ...card, padding: "20px 24px" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 44, height: 44, borderRadius: "50%", background: "linear-gradient(135deg, #D6E2F0, #EEF3FA)", border: `1px solid ${C.border}`, color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: "bold", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{am.name.charAt(0)}</div>
-                        <div>
-                          <div style={{ fontFamily: font.display, fontSize: 16, color: C.text, fontWeight: 600 }}>{am.name}</div>
-                          <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted, marginTop: 3 }}>{am.email}</div>
-                          <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 3 }}>{assignedClients.length} clients assigned</div>
-                        </div>
-                      </div>
-                      <button onClick={() => removeAccountManager(am.id)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontFamily: font.body, fontSize: 13 }}>Remove</button>
-                    </div>
-                    {assignedClients.length > 0 && (
-                      <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
-                        <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 2, color: C.textSub, textTransform: "uppercase", marginBottom: 10, fontWeight: 700 }}>Assigned Clients</div>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                          {assignedClients.map(b => <span key={b.id} style={{ fontFamily: font.body, fontSize: 13, padding: "4px 12px", borderRadius: 99, background: C.surfaceHover, border: `1px solid ${C.border}`, color: C.text }}>{b.name}</span>)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-              {accountManagers.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>No account managers yet.</div>}
-            </div>
-          </div>
-        )}
 
-        {/* Analytics */}
-        {!selectedBusiness && tab === "analytics" && (
-          <div className="fade-up">
-            <PageHeader title="Analytics" sub="Performance across all your clients" />
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 28 }}>
-              {[
-                { value: messages.length, label: "Total Texts Sent", color: C.gold },
-                { value: businesses.length, label: "Total Clients", color: C.green },
-                { value: messages.filter(m => { const d = new Date(m.sent_at); const n = new Date(); return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear(); }).length, label: "Sent This Month", color: "#4A90D9" },
-              ].map((s, i) => (
-                <div key={i} style={{ ...card, padding: "20px 16px", textAlign: "center" }}>
-                  <div style={{ fontFamily: font.display, fontSize: 36, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                  <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 8 }}>{s.label}</div>
+              <ClientNotesSection businessId={selectedBusiness.id} authorName={data.name} />
+
+              {/* Appointments — filtered to this client */}
+              <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Appointments — this client only</div>
+                  <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>Click a day to schedule</span>
+                </div>
+                <CalendarMonthGrid
+                  monthDate={monthDate}
+                  appointments={appointments}
+                  businessNameById={businessNameById}
+                  filterBusinessId={selectedBusiness.id}
+                  compact
+                  onDayClick={(date) => openScheduleModal(date, selectedBusiness.id, null)}
+                  onApptClick={(appt) => openScheduleModal(null, appt.business_id, appt)}
+                />
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadAll} />
+              </div>
+
+              <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                <AnalyticsTab log={bizMessages} businessName={selectedBusiness.name} photos={bizPhotos} socialLinks={selectedBusiness.social_links || {}} embedded={true} />
+              </div>
+
+              <ClientSettingsFull
+                business={selectedBusiness}
+                onSaved={(updated) => setSelectedBusiness(updated)}
+                onDeleteClient={(biz) => { setBusinessToDelete(biz); setDeleteConfirmText(""); setShowDeleteModal(true); }}
+              />
+            </div>
+          )}
+
+          {view === "photos" && (
+            <div className="fade-up" style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {businesses.map(b => (
+                <div key={b.id} onClick={() => { setView("clients"); selectBusiness(b); }} style={{ ...card, padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{b.name.charAt(0)}</div>
+                  <div style={{ flex: 1, fontFamily: font.display, fontSize: 15, fontWeight: 600 }}>{b.name}</div>
+                  {pendingPhotosByBiz[b.id] > 0 && <span style={{ background: "#FFF3CD", color: "#856404", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 99 }}>{pendingPhotosByBiz[b.id]} pending</span>}
                 </div>
               ))}
             </div>
-          </div>
-        )}
-      </main>
+          )}
+
+          {view === "managers" && (
+            <div className="fade-up">
+              {showAddManager && (
+                <div style={{ ...card, marginBottom: 20 }}>
+                  <div style={{ fontFamily: font.display, fontSize: 18, marginBottom: 16 }}>New Account Manager</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
+                    <div><Label>Full Name</Label><input style={inputStyle} value={newManager.name} onChange={e => setNewManager(d => ({ ...d, name: e.target.value }))} placeholder="John Smith" /></div>
+                    <div><Label>Email</Label><input style={inputStyle} value={newManager.email} onChange={e => setNewManager(d => ({ ...d, email: e.target.value }))} placeholder="john@yourcompany.com" /></div>
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button onClick={addAccountManager} disabled={savingManager} style={btnStyle}>{savingManager ? "Saving…" : "Add Manager"}</button>
+                    <button onClick={() => setShowAddManager(false)} style={ghostBtnStyle}>Cancel</button>
+                  </div>
+                </div>
+              )}
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {accountManagers.map(am => {
+                  const assignedClients = businesses.filter(b => b.account_manager_id === am.id);
+                  return (
+                    <div key={am.id} style={{ ...card, padding: "16px 20px" }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{am.name.charAt(0)}</div>
+                          <div>
+                            <div style={{ fontFamily: font.display, fontSize: 15, fontWeight: 600 }}>{am.name}</div>
+                            <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted }}>{am.email}</div>
+                            <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 2 }}>{assignedClients.length} clients assigned</div>
+                          </div>
+                        </div>
+                        <button onClick={() => removeAccountManager(am.id)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontFamily: font.body, fontSize: 13 }}>Remove</button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {accountManagers.length === 0 && <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, textAlign: "center", padding: 40 }}>No account managers yet.</div>}
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
     </div>
   );
 }
+
 // ── ACCOUNT MANAGER REBUILD ───────────────────────────────────────────────────
 // New: one master calendar per account manager (filterable per client), a private
 // running notes log per client, and full client settings editing (business info,
@@ -1237,7 +1227,7 @@ function toDateInputValue(d) { return d.toISOString().slice(0, 10); }
 function toTimeInputValue(d) { return d.toTimeString().slice(0, 5); }
 
 // ── CALENDAR GRID (shared by the main calendar and the per-client mini one) ─
-function CalendarMonthGrid({ monthDate, appointments, businessNameById, filterBusinessId, onDayClick, onApptClick, compact }) {
+function CalendarMonthGrid({ monthDate, appointments, businessNameById, managerNameById, filterBusinessId, onDayClick, onApptClick, compact }) {
   const total = daysInMonth(monthDate);
   const offset = firstWeekdayOfMonth(monthDate);
   const today = new Date();
@@ -1273,9 +1263,9 @@ function CalendarMonthGrid({ monthDate, appointments, businessNameById, filterBu
             {dayAppts.map(a => (
               <div key={a.id}
                 onClick={(e) => { e.stopPropagation(); onApptClick(a); }}
-                title={businessNameById[a.business_id] + " — " + a.title}
+                title={businessNameById[a.business_id] + (managerNameById && managerNameById[a.account_manager_id] ? " · " + managerNameById[a.account_manager_id] : "") + " — " + a.title}
                 style={{ marginTop: 2, fontSize: 9, background: "#ede9fe", color: "#6d28d9", borderRadius: 4, padding: "1px 3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {fmtTime(new Date(a.starts_at))} {businessNameById[a.business_id]}
+                {fmtTime(new Date(a.starts_at))} {businessNameById[a.business_id]}{managerNameById && managerNameById[a.account_manager_id] ? " (" + managerNameById[a.account_manager_id] + ")" : ""}
               </div>
             ))}
           </div>
@@ -1409,7 +1399,7 @@ function ClientNotesSection({ businessId, authorName }) {
 }
 
 // ── FULL CLIENT SETTINGS (everything the business owner can edit, editable here too) ─
-function ClientSettingsFull({ business, onSaved }) {
+function ClientSettingsFull({ business, onSaved, onDeleteClient }) {
   const [form, setForm] = useState({
     name: business.name || "", google_link: business.google_link || "", yelp_link: business.yelp_link || "",
     message_template: business.message_template || "",
@@ -1594,6 +1584,17 @@ function ClientSettingsFull({ business, onSaved }) {
           );
         })}
       </div>
+
+      {onDeleteClient && (
+        <div style={{ marginTop: 28, paddingTop: 20, borderTop: "1px solid #ffcccc" }}>
+          <div style={{ fontFamily: font.display, fontSize: 15, color: "#cc0000", marginBottom: 6 }}>Danger Zone</div>
+          <p style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginBottom: 14 }}>Permanently delete this client and all their data — messages, photos, appointments, and notes. This cannot be undone.</p>
+          <button onClick={() => onDeleteClient(business)}
+            style={{ padding: "9px 20px", background: "transparent", color: "#cc0000", border: "1.5px solid #cc0000", borderRadius: 8, fontFamily: font.body, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+            Delete client
+          </button>
+        </div>
+      )}
     </div>
   );
 }
