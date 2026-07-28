@@ -2972,6 +2972,7 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
   const [generating, setGenerating] = useState(false);
   const [captionCopied, setCaptionCopied] = useState(false);
   const [activePlatform, setActivePlatform] = useState(null);
+  const [showMorePhotos, setShowMorePhotos] = useState(false);
 
   const PHOTO_PLATFORMS = [
     { id: "google", label: "GP", fullLabel: "Google", color: "#4A90D9" },
@@ -3083,13 +3084,13 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
           <p style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, textAlign: "center", marginTop: 4 }}>Photos will be reviewed and posted to your listings by your account manager.</p>
         </div>
       )}
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {photos.map((photo, i) => {
+      {(() => {
+        const renderPhotoCard = (photo) => {
           const postedPlatforms = photo.posted_platforms || [];
           const isFullyPosted = postedPlatforms.length === PHOTO_PLATFORMS.length;
           const isPartiallyPosted = postedPlatforms.length > 0 && !isFullyPosted;
           return (
-            <div key={i} style={{ background: "#fff", borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <div key={photo.id} style={{ background: "#fff", borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
               <div style={{ height: 2, background: isFullyPosted ? "#1A8C4E" : isPartiallyPosted ? "#F59E0B" : photo.status === "downloaded" ? "#3B82F6" : "#E5E7EB" }} />
               <div style={{ padding: "12px 16px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -3150,9 +3151,33 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
               </div>
             </div>
           );
-        })}
-        {photos.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>{isAdmin || isMarketing ? "No photos from clients yet." : "No photos uploaded yet."}</div>}
-      </div>
+        };
+
+        const visiblePhotos = photos.slice(0, 5);
+        const morePhotos = photos.slice(5);
+
+        return (
+          <>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {visiblePhotos.map(renderPhotoCard)}
+              {photos.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>{isAdmin || isMarketing ? "No photos from clients yet." : "No photos uploaded yet."}</div>}
+            </div>
+            {morePhotos.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <button onClick={() => setShowMorePhotos(s => !s)}
+                  style={{ ...ghostBtnStyle, width: "100%", fontSize: 13, padding: "10px" }}>
+                  {showMorePhotos ? "Hide older photos" : `Show ${morePhotos.length} older photo${morePhotos.length > 1 ? "s" : ""}`}
+                </button>
+                {showMorePhotos && (
+                  <div style={{ maxHeight: 480, overflowY: "auto", marginTop: 12, paddingRight: 4, display: "flex", flexDirection: "column", gap: 16 }}>
+                    {morePhotos.map(renderPhotoCard)}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        );
+      })()}
 
       {/* AI Caption Modal */}
       {captionModal && (
