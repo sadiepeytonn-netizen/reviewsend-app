@@ -2972,7 +2972,6 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
   const [generating, setGenerating] = useState(false);
   const [captionCopied, setCaptionCopied] = useState(false);
   const [activePlatform, setActivePlatform] = useState(null);
-  const [showMorePhotos, setShowMorePhotos] = useState(false);
 
   const PHOTO_PLATFORMS = [
     { id: "google", label: "GP", fullLabel: "Google", color: "#4A90D9" },
@@ -3093,17 +3092,18 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
             <div key={photo.id} style={{ background: "#fff", borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden", flexShrink: 0 }}>
               <div style={{ height: 2, background: isFullyPosted ? "#1A8C4E" : isPartiallyPosted ? "#F59E0B" : photo.status === "downloaded" ? "#3B82F6" : "#E5E7EB" }} />
               <div style={{ padding: "12px 16px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                  <div style={{ width: 56, height: 56, borderRadius: 8, background: "#F4F7FB", border: `1px solid ${C.border}`, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 10 }}>
+                  <div style={{ width: 140, height: 140, borderRadius: 10, background: "#F4F7FB", border: `1px solid ${C.border}`, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {photo.publicUrl ? (
                       <img
                         src={photo.publicUrl}
                         alt={photo.file_name}
+                        draggable="true"
                         style={{ width: "100%", height: "100%", objectFit: "cover" }}
                         onError={e => { e.target.style.display = "none"; e.target.nextSibling && (e.target.nextSibling.style.display = "block"); }}
                       />
                     ) : null}
-                    <span style={{ fontSize: 20, display: photo.publicUrl ? "none" : "block" }}>📷</span>
+                    <span style={{ fontSize: 32, display: photo.publicUrl ? "none" : "block" }}>📷</span>
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontFamily: font.display, fontSize: 13, color: C.text, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{photo.file_name}</div>
@@ -3153,29 +3153,11 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
           );
         };
 
-        const visiblePhotos = photos.slice(0, 5);
-        const morePhotos = photos.slice(5);
-
         return (
-          <>
-            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-              {visiblePhotos.map(renderPhotoCard)}
-              {photos.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>{isAdmin || isMarketing ? "No photos from clients yet." : "No photos uploaded yet."}</div>}
-            </div>
-            {morePhotos.length > 0 && (
-              <div style={{ marginTop: 16 }}>
-                <button onClick={() => setShowMorePhotos(s => !s)}
-                  style={{ ...ghostBtnStyle, width: "100%", fontSize: 13, padding: "10px" }}>
-                  {showMorePhotos ? "Hide older photos" : `Show ${morePhotos.length} older photo${morePhotos.length > 1 ? "s" : ""}`}
-                </button>
-                {showMorePhotos && (
-                  <div style={{ maxHeight: 480, overflowY: "auto", marginTop: 12, paddingRight: 4, display: "flex", flexDirection: "column", gap: 16 }}>
-                    {morePhotos.map(renderPhotoCard)}
-                  </div>
-                )}
-              </div>
-            )}
-          </>
+          <div style={{ maxHeight: 860, overflowY: "auto", paddingRight: 4, display: "flex", flexDirection: "column", gap: 16 }}>
+            {photos.map(renderPhotoCard)}
+            {photos.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>{isAdmin || isMarketing ? "No photos from clients yet." : "No photos uploaded yet."}</div>}
+          </div>
         );
       })()}
 
