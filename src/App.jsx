@@ -991,12 +991,12 @@ function MarketingDashboard({ data, onSignOut }) {
           <div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>
             {view === "calendar" ? "Calendar — every account manager" : view === "clients" ? "Clients" : view === "photos" ? "Photos — by client" : "Account Managers"}
           </div>
-          {view === "clients" && !selectedBusiness && <button onClick={() => setShowAddClient(true)} style={{ ...btnStyle, fontSize: 14 }}>+ Add Client</button>}
+          {view === "clients" && <button onClick={() => setShowAddClient(true)} style={{ ...btnStyle, fontSize: 14 }}>+ Add Client</button>}
           {view === "managers" && <button onClick={() => setShowAddManager(true)} style={{ ...btnStyle, fontSize: 14 }}>+ Add Manager</button>}
-          {(view === "calendar" || (view === "clients" && selectedBusiness)) && <button onClick={() => openScheduleModal(null, null, null)} style={{ ...btnStyle, fontSize: 14 }}>+ Schedule</button>}
+          {(view === "calendar" || view === "clients") && <button onClick={() => openScheduleModal(null, null, null)} style={{ ...btnStyle, fontSize: 14 }}>+ Schedule</button>}
         </div>
 
-        <div style={{ padding: 32, maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ padding: 32 }}>
 
           {view === "calendar" && (
             <div className="fade-up">
@@ -1035,115 +1035,120 @@ function MarketingDashboard({ data, onSignOut }) {
             </div>
           )}
 
-          {view === "clients" && !selectedBusiness && (
-            <div className="fade-up">
-              {showAddClient && (
-                <div style={{ ...card, marginBottom: 20 }}>
-                  <div style={{ fontFamily: font.display, fontSize: 18, marginBottom: 16 }}>New Client Business</div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 16 }}>
-                    <div><Label>Business Name</Label><input style={inputStyle} value={newBiz.name} onChange={e => setNewBiz(d => ({ ...d, name: e.target.value }))} placeholder="Joe's Restaurant" /></div>
-                    <div><Label>Login Email</Label><input style={inputStyle} value={newBiz.email} onChange={e => setNewBiz(d => ({ ...d, email: e.target.value }))} placeholder="joe@restaurant.com" /></div>
-                    <div><Label>Google Review Link</Label><input style={inputStyle} value={newBiz.google_link} onChange={e => setNewBiz(d => ({ ...d, google_link: e.target.value }))} placeholder="https://g.page/r/..." /></div>
-                    <div><Label>Yelp Review Link</Label><input style={inputStyle} value={newBiz.yelp_link} onChange={e => setNewBiz(d => ({ ...d, yelp_link: e.target.value }))} placeholder="https://www.yelp.com/biz/..." /></div>
-                  </div>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button onClick={addBusiness} disabled={savingClient} style={btnStyle}>{savingClient ? "Saving…" : "Create Client"}</button>
-                    <button onClick={() => setShowAddClient(false)} style={ghostBtnStyle}>Cancel</button>
-                  </div>
-                </div>
-              )}
-              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search clients…" style={{ ...inputStyle, marginBottom: 20 }} />
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {filteredBusinesses.map(b => (
-                  <div key={b.id} onClick={() => selectBusiness(b)} style={{ ...card, padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{b.name.charAt(0)}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontFamily: font.display, fontSize: 15, fontWeight: 600 }}>{b.name}</div>
-                      <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted }}>{b.email}</div>
-                      {managerNameById[b.account_manager_id] && <div style={{ fontFamily: font.body, fontSize: 12, color: C.gold, marginTop: 2 }}>👤 {managerNameById[b.account_manager_id]}</div>}
+          {view === "clients" && (
+            <div className="fade-up" style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+              <div style={{ width: 300, flexShrink: 0 }}>
+                {showAddClient && (
+                  <div style={{ ...card, marginBottom: 16 }}>
+                    <div style={{ fontFamily: font.display, fontSize: 16, marginBottom: 14 }}>New Client Business</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 14 }}>
+                      <input style={inputStyle} value={newBiz.name} onChange={e => setNewBiz(d => ({ ...d, name: e.target.value }))} placeholder="Business name" />
+                      <input style={inputStyle} value={newBiz.email} onChange={e => setNewBiz(d => ({ ...d, email: e.target.value }))} placeholder="Login email" />
+                      <input style={inputStyle} value={newBiz.google_link} onChange={e => setNewBiz(d => ({ ...d, google_link: e.target.value }))} placeholder="Google review link" />
+                      <input style={inputStyle} value={newBiz.yelp_link} onChange={e => setNewBiz(d => ({ ...d, yelp_link: e.target.value }))} placeholder="Yelp review link" />
                     </div>
-                    {unreadChatByBiz[b.id] > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#E85D04" }} />}
-                    {pendingPhotosByBiz[b.id] > 0 && <span style={{ background: "#FFF3CD", color: "#856404", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 99 }}>{pendingPhotosByBiz[b.id]} pending</span>}
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={addBusiness} disabled={savingClient} style={{ ...btnStyle, fontSize: 13, padding: "8px 14px" }}>{savingClient ? "Saving…" : "Create"}</button>
+                      <button onClick={() => setShowAddClient(false)} style={{ ...ghostBtnStyle, fontSize: 13, padding: "8px 14px" }}>Cancel</button>
+                    </div>
                   </div>
-                ))}
-                {filteredBusinesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, textAlign: "center", padding: 40 }}>{searchQuery ? "No clients match." : "No clients yet. Add one above!"}</div>}
-              </div>
-            </div>
-          )}
-
-          {view === "clients" && selectedBusiness && (
-            <div className="fade-up">
-              <button onClick={() => setSelectedBusiness(null)} style={{ background: "none", border: "none", color: C.gold, fontFamily: font.body, fontSize: 14, cursor: "pointer", marginBottom: 20, padding: 0 }}>← Back to clients</button>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
-                <div><div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>{selectedBusiness.name}</div><div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{selectedBusiness.email}</div></div>
-              </div>
-              {(() => {
-                const next = nextApptFor(selectedBusiness.id);
-                return <div style={{ fontFamily: font.body, fontSize: 13, color: C.gold, marginBottom: 12 }}>{next ? `Next: ${new Date(next.starts_at).toLocaleDateString([], { month: "short", day: "numeric" })}, ${fmtTime(new Date(next.starts_at))} — ${next.title}` : "No upcoming appointment"}</div>;
-              })()}
-
-              <div style={{ marginBottom: 20 }}>
-                <Label>Assigned Account Manager</Label>
-                <select value={selectedBusiness.account_manager_id || ""} onChange={e => assignToManager(selectedBusiness.id, e.target.value)} style={inputStyle}>
-                  <option value="">Unassigned</option>
-                  {accountManagers.map(am => <option key={am.id} value={am.id}>{am.name}</option>)}
-                </select>
-              </div>
-
-              {/* Messages */}
-              <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Messages</div>
-                  {unreadChatByBiz[selectedBusiness.id] > 0 && <span style={{ background: "#E85D04", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>{unreadChatByBiz[selectedBusiness.id]} new</span>}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto", marginBottom: 12 }}>
-                  {chatMessages.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>No messages yet.</div>}
-                  {chatMessages.map((m, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: m.sender_role === "manager" ? "flex-end" : "flex-start" }}>
-                      <div style={{ maxWidth: "75%", padding: "8px 12px", borderRadius: 14, background: m.sender_role === "manager" ? C.gold : "#F0F4FA", color: m.sender_role === "manager" ? "#fff" : C.text, fontFamily: font.body, fontSize: 13 }}>{m.message}</div>
+                )}
+                <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search clients…" style={{ ...inputStyle, marginBottom: 16 }} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 240px)", overflowY: "auto" }}>
+                  {filteredBusinesses.map(b => (
+                    <div key={b.id} onClick={() => selectBusiness(b)}
+                      style={{ ...card, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, border: selectedBusiness?.id === b.id ? `2px solid ${C.gold}` : `1px solid ${C.border}` }}>
+                      <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{b.name.charAt(0)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: font.display, fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</div>
+                        <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.email}</div>
+                        {managerNameById[b.account_manager_id] && <div style={{ fontFamily: font.body, fontSize: 11, color: C.gold }}>👤 {managerNameById[b.account_manager_id]}</div>}
+                      </div>
+                      {unreadChatByBiz[b.id] > 0 && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#E85D04", flexShrink: 0 }} />}
+                      {pendingPhotosByBiz[b.id] > 0 && <span style={{ background: "#FFF3CD", color: "#856404", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, flexShrink: 0 }}>{pendingPhotosByBiz[b.id]}</span>}
                     </div>
                   ))}
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Message this client…" style={{ ...inputStyle, flex: 1 }} />
-                  <button onClick={sendChat} style={{ ...btnStyle, fontSize: 13, padding: "10px 18px" }}>Send</button>
+                  {filteredBusinesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, textAlign: "center", padding: 30 }}>{searchQuery ? "No clients match." : "No clients yet."}</div>}
                 </div>
               </div>
 
-              <ClientNotesSection businessId={selectedBusiness.id} authorName={data.name} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {!selectedBusiness ? (
+                  <div style={{ ...card, padding: 60, textAlign: "center", color: C.textMuted, fontFamily: font.body, fontSize: 14 }}>Select a client from the list to view their workspace.</div>
+                ) : (
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
+                      <div><div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>{selectedBusiness.name}</div><div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{selectedBusiness.email}</div></div>
+                    </div>
+                    {(() => {
+                      const next = nextApptFor(selectedBusiness.id);
+                      return <div style={{ fontFamily: font.body, fontSize: 13, color: C.gold, marginBottom: 12 }}>{next ? `Next: ${new Date(next.starts_at).toLocaleDateString([], { month: "short", day: "numeric" })}, ${fmtTime(new Date(next.starts_at))} — ${next.title}` : "No upcoming appointment"}</div>;
+                    })()}
 
-              {/* Appointments — filtered to this client */}
-              <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Appointments — this client only</div>
-                  <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>Click a day to schedule</span>
-                </div>
-                <CalendarMonthGrid
-                  monthDate={monthDate}
-                  appointments={appointments}
-                  businessNameById={businessNameById}
-                  filterBusinessId={selectedBusiness.id}
-                  compact
-                  onDayClick={(date) => openScheduleModal(date, selectedBusiness.id, null)}
-                  onApptClick={(appt) => openScheduleModal(null, appt.business_id, appt)}
-                />
+                    <div style={{ marginBottom: 20 }}>
+                      <Label>Assigned Account Manager</Label>
+                      <select value={selectedBusiness.account_manager_id || ""} onChange={e => assignToManager(selectedBusiness.id, e.target.value)} style={inputStyle}>
+                        <option value="">Unassigned</option>
+                        {accountManagers.map(am => <option key={am.id} value={am.id}>{am.name}</option>)}
+                      </select>
+                    </div>
+
+                    {/* Messages */}
+                    <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                        <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Messages</div>
+                        {unreadChatByBiz[selectedBusiness.id] > 0 && <span style={{ background: "#E85D04", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>{unreadChatByBiz[selectedBusiness.id]} new</span>}
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto", marginBottom: 12 }}>
+                        {chatMessages.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>No messages yet.</div>}
+                        {chatMessages.map((m, i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: m.sender_role === "manager" ? "flex-end" : "flex-start" }}>
+                            <div style={{ maxWidth: "75%", padding: "8px 12px", borderRadius: 14, background: m.sender_role === "manager" ? C.gold : "#F0F4FA", color: m.sender_role === "manager" ? "#fff" : C.text, fontFamily: font.body, fontSize: 13 }}>{m.message}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Message this client…" style={{ ...inputStyle, flex: 1 }} />
+                        <button onClick={sendChat} style={{ ...btnStyle, fontSize: 13, padding: "10px 18px" }}>Send</button>
+                      </div>
+                    </div>
+
+                    <ClientNotesSection businessId={selectedBusiness.id} authorName={data.name} />
+
+                    {/* Appointments — filtered to this client */}
+                    <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                        <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Appointments — this client only</div>
+                        <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>Click a day to schedule</span>
+                      </div>
+                      <CalendarMonthGrid
+                        monthDate={monthDate}
+                        appointments={appointments}
+                        businessNameById={businessNameById}
+                        filterBusinessId={selectedBusiness.id}
+                        compact
+                        onDayClick={(date) => openScheduleModal(date, selectedBusiness.id, null)}
+                        onApptClick={(appt) => openScheduleModal(null, appt.business_id, appt)}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: 16 }}>
+                      <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadAll} />
+                    </div>
+
+                    <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                      <AnalyticsTab log={bizMessages} businessName={selectedBusiness.name} photos={bizPhotos} socialLinks={selectedBusiness.social_links || {}} embedded={true} />
+                    </div>
+
+                    <ClientSettingsFull
+                      business={selectedBusiness}
+                      onSaved={(updated) => setSelectedBusiness(updated)}
+                      onDeleteClient={(biz) => { setBusinessToDelete(biz); setDeleteConfirmText(""); setShowDeleteModal(true); }}
+                    />
+                  </div>
+                )}
               </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadAll} />
-              </div>
-
-              <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                <AnalyticsTab log={bizMessages} businessName={selectedBusiness.name} photos={bizPhotos} socialLinks={selectedBusiness.social_links || {}} embedded={true} />
-              </div>
-
-              <ClientSettingsFull
-                business={selectedBusiness}
-                onSaved={(updated) => setSelectedBusiness(updated)}
-                onDeleteClient={(biz) => { setBusinessToDelete(biz); setDeleteConfirmText(""); setShowDeleteModal(true); }}
-              />
             </div>
           )}
 
@@ -1750,7 +1755,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
           <button onClick={() => openScheduleModal(null, null, null)} style={{ ...btnStyle, fontSize: 14 }}>+ Schedule</button>
         </div>
 
-        <div style={{ padding: 32, maxWidth: 900, margin: "0 auto" }}>
+        <div style={{ padding: 32 }}>
 
           {view === "calendar" && (
             <div className="fade-up">
@@ -1785,87 +1790,92 @@ function AccountManagerDashboard({ data, onSignOut }) {
             </div>
           )}
 
-          {view === "clients" && !selectedBusiness && (
-            <div className="fade-up">
-              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search clients…" style={{ ...inputStyle, marginBottom: 20 }} />
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {filteredBusinesses.map(b => (
-                  <div key={b.id} onClick={() => selectBusiness(b)} style={{ ...card, padding: "16px 20px", cursor: "pointer", display: "flex", alignItems: "center", gap: 12 }}>
-                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{b.name.charAt(0)}</div>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ fontFamily: font.display, fontSize: 15, fontWeight: 600 }}>{b.name}</div>
-                      <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted }}>{b.email}</div>
-                    </div>
-                    {unreadChatByBiz[b.id] > 0 && <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#E85D04" }} />}
-                    {pendingPhotosByBiz[b.id] > 0 && <span style={{ background: "#FFF3CD", color: "#856404", fontSize: 11, fontWeight: 700, padding: "3px 9px", borderRadius: 99 }}>{pendingPhotosByBiz[b.id]} pending</span>}
-                  </div>
-                ))}
-                {filteredBusinesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, textAlign: "center", padding: 40 }}>No clients match.</div>}
-              </div>
-            </div>
-          )}
-
-          {view === "clients" && selectedBusiness && (
-            <div className="fade-up">
-              <button onClick={() => setSelectedBusiness(null)} style={{ background: "none", border: "none", color: C.gold, fontFamily: font.body, fontSize: 14, cursor: "pointer", marginBottom: 20, padding: 0 }}>← Back to clients</button>
-
-              <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-                <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
-                <div><div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>{selectedBusiness.name}</div><div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{selectedBusiness.email}</div></div>
-              </div>
-              {(() => {
-                const next = nextApptFor(selectedBusiness.id);
-                return <div style={{ fontFamily: font.body, fontSize: 13, color: C.gold, marginBottom: 20 }}>{next ? `Next: ${new Date(next.starts_at).toLocaleDateString([], { month: "short", day: "numeric" })}, ${fmtTime(new Date(next.starts_at))} — ${next.title}` : "No upcoming appointment"}</div>;
-              })()}
-
-              {/* Messages */}
-              <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Messages</div>
-                  {unreadChatByBiz[selectedBusiness.id] > 0 && <span style={{ background: "#E85D04", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>{unreadChatByBiz[selectedBusiness.id]} new</span>}
-                </div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto", marginBottom: 12 }}>
-                  {chatMessages.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>No messages yet.</div>}
-                  {chatMessages.map((m, i) => (
-                    <div key={i} style={{ display: "flex", justifyContent: m.sender_role === "manager" ? "flex-end" : "flex-start" }}>
-                      <div style={{ maxWidth: "75%", padding: "8px 12px", borderRadius: 14, background: m.sender_role === "manager" ? C.gold : "#F0F4FA", color: m.sender_role === "manager" ? "#fff" : C.text, fontFamily: font.body, fontSize: 13 }}>{m.message}</div>
+          {view === "clients" && (
+            <div className="fade-up" style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+              <div style={{ width: 300, flexShrink: 0 }}>
+                <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search clients…" style={{ ...inputStyle, marginBottom: 16 }} />
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 240px)", overflowY: "auto" }}>
+                  {filteredBusinesses.map(b => (
+                    <div key={b.id} onClick={() => selectBusiness(b)}
+                      style={{ ...card, padding: "12px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, border: selectedBusiness?.id === b.id ? `2px solid ${C.gold}` : `1px solid ${C.border}` }}>
+                      <div style={{ width: 34, height: 34, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontWeight: 700, fontSize: 14, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>{b.name.charAt(0)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontFamily: font.display, fontSize: 14, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.name}</div>
+                        <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{b.email}</div>
+                      </div>
+                      {unreadChatByBiz[b.id] > 0 && <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#E85D04", flexShrink: 0 }} />}
+                      {pendingPhotosByBiz[b.id] > 0 && <span style={{ background: "#FFF3CD", color: "#856404", fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 99, flexShrink: 0 }}>{pendingPhotosByBiz[b.id]}</span>}
                     </div>
                   ))}
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Message this client…" style={{ ...inputStyle, flex: 1 }} />
-                  <button onClick={sendChat} style={{ ...btnStyle, fontSize: 13, padding: "10px 18px" }}>Send</button>
+                  {filteredBusinesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, textAlign: "center", padding: 30 }}>No clients match.</div>}
                 </div>
               </div>
 
-              <ClientNotesSection businessId={selectedBusiness.id} authorName={data.name} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {!selectedBusiness ? (
+                  <div style={{ ...card, padding: 60, textAlign: "center", color: C.textMuted, fontFamily: font.body, fontSize: 14 }}>Select a client from the list to view their workspace.</div>
+                ) : (
+                  <div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
+                      <div><div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>{selectedBusiness.name}</div><div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{selectedBusiness.email}</div></div>
+                    </div>
+                    {(() => {
+                      const next = nextApptFor(selectedBusiness.id);
+                      return <div style={{ fontFamily: font.body, fontSize: 13, color: C.gold, marginBottom: 20 }}>{next ? `Next: ${new Date(next.starts_at).toLocaleDateString([], { month: "short", day: "numeric" })}, ${fmtTime(new Date(next.starts_at))} — ${next.title}` : "No upcoming appointment"}</div>;
+                    })()}
 
-              {/* Appointments — filtered to this client */}
-              <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                  <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Appointments — this client only</div>
-                  <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>Click a day to schedule</span>
-                </div>
-                <CalendarMonthGrid
-                  monthDate={monthDate}
-                  appointments={appointments}
-                  businessNameById={businessNameById}
-                  filterBusinessId={selectedBusiness.id}
-                  compact
-                  onDayClick={(date) => openScheduleModal(date, selectedBusiness.id, null)}
-                  onApptClick={(appt) => openScheduleModal(null, appt.business_id, appt)}
-                />
+                    {/* Messages */}
+                    <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                        <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Messages</div>
+                        {unreadChatByBiz[selectedBusiness.id] > 0 && <span style={{ background: "#E85D04", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>{unreadChatByBiz[selectedBusiness.id]} new</span>}
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto", marginBottom: 12 }}>
+                        {chatMessages.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>No messages yet.</div>}
+                        {chatMessages.map((m, i) => (
+                          <div key={i} style={{ display: "flex", justifyContent: m.sender_role === "manager" ? "flex-end" : "flex-start" }}>
+                            <div style={{ maxWidth: "75%", padding: "8px 12px", borderRadius: 14, background: m.sender_role === "manager" ? C.gold : "#F0F4FA", color: m.sender_role === "manager" ? "#fff" : C.text, fontFamily: font.body, fontSize: 13 }}>{m.message}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Message this client…" style={{ ...inputStyle, flex: 1 }} />
+                        <button onClick={sendChat} style={{ ...btnStyle, fontSize: 13, padding: "10px 18px" }}>Send</button>
+                      </div>
+                    </div>
+
+                    <ClientNotesSection businessId={selectedBusiness.id} authorName={data.name} />
+
+                    {/* Appointments — filtered to this client */}
+                    <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                        <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Appointments — this client only</div>
+                        <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>Click a day to schedule</span>
+                      </div>
+                      <CalendarMonthGrid
+                        monthDate={monthDate}
+                        appointments={appointments}
+                        businessNameById={businessNameById}
+                        filterBusinessId={selectedBusiness.id}
+                        compact
+                        onDayClick={(date) => openScheduleModal(date, selectedBusiness.id, null)}
+                        onApptClick={(appt) => openScheduleModal(null, appt.business_id, appt)}
+                      />
+                    </div>
+
+                    <div style={{ marginBottom: 16 }}>
+                      <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadAll} />
+                    </div>
+
+                    <div style={{ ...card, padding: 20, marginBottom: 16 }}>
+                      <AnalyticsTab log={bizMessages} businessName={selectedBusiness.name} photos={bizPhotos} socialLinks={selectedBusiness.social_links || {}} embedded={true} />
+                    </div>
+
+                    <ClientSettingsFull business={selectedBusiness} onSaved={(updated) => setSelectedBusiness(updated)} />
+                  </div>
+                )}
               </div>
-
-              <div style={{ marginBottom: 16 }}>
-                <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadAll} />
-              </div>
-
-              <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                <AnalyticsTab log={bizMessages} businessName={selectedBusiness.name} photos={bizPhotos} socialLinks={selectedBusiness.social_links || {}} embedded={true} />
-              </div>
-
-              <ClientSettingsFull business={selectedBusiness} onSaved={(updated) => setSelectedBusiness(updated)} />
             </div>
           )}
 
