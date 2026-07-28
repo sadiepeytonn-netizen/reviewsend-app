@@ -3110,7 +3110,7 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
                     <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 2, flexWrap: "wrap" }}>
                       {(isAdmin || isMarketing) && photo.businesses && <span style={{ fontFamily: font.body, fontSize: 11, color: C.gold, fontWeight: 600 }}>{photo.businesses.name}</span>}
                       {photo.caption && <span style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted }}>"{photo.caption}"</span>}
-                      <span style={{ fontFamily: font.mono, fontSize: 10, color: C.textSub }}>{timeAgo(photo.created_at)}</span>
+                      <span style={{ fontFamily: font.mono, fontSize: 13, fontWeight: 600, color: C.textMuted }}>{timeAgo(photo.created_at)}</span>
                     </div>
                   </div>
                   <div style={{ flexShrink: 0 }}>
