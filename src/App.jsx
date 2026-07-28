@@ -3090,7 +3090,7 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
           const isFullyPosted = postedPlatforms.length === PHOTO_PLATFORMS.length;
           const isPartiallyPosted = postedPlatforms.length > 0 && !isFullyPosted;
           return (
-            <div key={photo.id} style={{ background: "#fff", borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+            <div key={photo.id} style={{ background: "#fff", borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden", flexShrink: 0 }}>
               <div style={{ height: 2, background: isFullyPosted ? "#1A8C4E" : isPartiallyPosted ? "#F59E0B" : photo.status === "downloaded" ? "#3B82F6" : "#E5E7EB" }} />
               <div style={{ padding: "12px 16px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
