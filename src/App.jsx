@@ -872,7 +872,7 @@ function MarketingDashboard({ data, onSignOut }) {
 
         const locRes = await fetch(`${SERVER}/google/locations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: tokens.access_token }) });
         const locResult = await locRes.json();
-        if (!locResult.success) { setGoogleConnectError(locResult.error || "Could not fetch Google locations."); setGoogleConnectLoading(false); return; }
+        if (!locResult.success) { console.log("[GOOGLE] locations debug:", locResult.debug); setGoogleConnectError((locResult.error || "Could not fetch Google locations.") + (locResult.debug ? " Accounts found: " + JSON.stringify(locResult.debug) : "")); setGoogleConnectLoading(false); return; }
 
         if (locResult.locations.length === 1) {
           await finishGoogleConnect(state, tokens.access_token, locResult.locations[0]);
@@ -1808,7 +1808,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
 
         const locRes = await fetch(`${SERVER}/google/locations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: tokens.access_token }) });
         const locResult = await locRes.json();
-        if (!locResult.success) { setGoogleConnectError(locResult.error || "Could not fetch Google locations."); setGoogleConnectLoading(false); return; }
+        if (!locResult.success) { console.log("[GOOGLE] locations debug:", locResult.debug); setGoogleConnectError((locResult.error || "Could not fetch Google locations.") + (locResult.debug ? " Accounts found: " + JSON.stringify(locResult.debug) : "")); setGoogleConnectLoading(false); return; }
 
         if (locResult.locations.length === 1) {
           await finishGoogleConnect(state, tokens.access_token, locResult.locations[0]);
