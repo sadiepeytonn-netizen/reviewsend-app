@@ -57,6 +57,23 @@ input:disabled, textarea:disabled { opacity: 0.5; cursor: not-allowed; }
 const SERVER = "https://reviewsend-server-production.up.railway.app";
 const SUPER_ADMIN_EMAIL = "bentonisaiah03@gmail.com";
 
+// ── SHARED GOOGLE OAUTH HELPERS ───────────────────────────────────────────────
+// Used by the business owner's own Settings tab AND by account managers /
+// marketing companies connecting a client's Google Business Profile using
+// their own Google login (as long as they've been added as a Manager on that
+// client's listing). The `state` param carries which business record this
+// connection is for, so the flow works no matter who's logged in.
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
+const GOOGLE_REDIRECT_URI = "https://app.reviewsend.io";
+const GOOGLE_SCOPES = "https://www.googleapis.com/auth/business.manage";
+function buildGoogleConnectUrl(businessId) {
+  const params = new URLSearchParams({
+    client_id: GOOGLE_CLIENT_ID, redirect_uri: GOOGLE_REDIRECT_URI, response_type: "code",
+    scope: GOOGLE_SCOPES, access_type: "offline", prompt: "consent", state: String(businessId),
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
+}
+
 // ── FEATURE 4: Photo upload validation ───────────────────────────────────────
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg", "image/jpg", "image/png", "image/gif",
@@ -183,6 +200,52 @@ function ForgotPasswordModal({ onClose }) {
             </div>
           </form>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── LOCATION PICKER MODAL ─────────────────────────────────────────────────────
+// Shown right after Google OAuth connects, when the account manages more than
+// one business location. Lets the user pick which one to link to this
+// ReviewSend business record.
+function LocationPickerModal({ locations, onSelect, onClose }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: 28, width: "100%", maxWidth: 440, maxHeight: "80vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.25)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+          <h2 style={{ fontFamily: font.display, fontSize: 18, fontWeight: 600, color: C.text, margin: 0 }}>
+            Which business is this?
+          </h2>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: C.textMuted, fontSize: 20, lineHeight: 1 }}>×</button>
+        </div>
+        <p style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginBottom: 18, lineHeight: 1.5 }}>
+          This Google account manages {locations.length} business locations. Pick the one to connect here.
+        </p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {locations.map((loc) => (
+            <button
+              key={loc.location_id}
+              onClick={() => onSelect(loc)}
+              style={{
+                textAlign: "left", padding: "14px 16px", borderRadius: 12,
+                border: `1.5px solid ${C.border}`, background: C.bg,
+                cursor: "pointer", display: "flex", flexDirection: "column", gap: 4,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = C.gold; e.currentTarget.style.background = C.surfaceHover; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.background = C.bg; }}
+            >
+              <div style={{ fontFamily: font.display, fontSize: 15, fontWeight: 600, color: C.text }}>
+                {loc.title || "Untitled location"}
+              </div>
+              {loc.address && (
+                <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>
+                  {loc.address}
+                </div>
+              )}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -776,7 +839,66 @@ function MarketingDashboard({ data, onSignOut }) {
   const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
   const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
 
+  // Connecting a client's Google Business Profile using the marketing company's
+  // own login (works as long as they've been added as a Manager on that client's
+  // listing — see buildGoogleConnectUrl / /google/locations picker flow).
+  const [googleConnectLoading, setGoogleConnectLoading] = useState(false);
+  const [googleConnectError, setGoogleConnectError] = useState("");
+  const [googleLocationChoices, setGoogleLocationChoices] = useState(null); // { businessId, accessToken, locations }
+  const [showGoogleLocationPicker, setShowGoogleLocationPicker] = useState(false);
+
   useEffect(() => { loadAll(); }, []);
+
+  // Handle returning from Google's OAuth screen for a specific client business.
+  // The App-level effect (top of file) stashes ?code and ?state into
+  // sessionStorage before this component ever mounts; state is the business id
+  // we passed into buildGoogleConnectUrl when Connect was clicked.
+  useEffect(() => {
+    const code = sessionStorage.getItem("google_oauth_code");
+    const state = sessionStorage.getItem("google_oauth_state");
+    if (!code || !state) return;
+    sessionStorage.removeItem("google_oauth_code");
+    sessionStorage.removeItem("google_oauth_state");
+    (async () => {
+      setGoogleConnectLoading(true);
+      setGoogleConnectError("");
+      try {
+        const tokenRes = await fetch(`${SERVER}/google/token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, redirectUri: GOOGLE_REDIRECT_URI }) });
+        const tokens = await tokenRes.json();
+        if (!tokens.success) { setGoogleConnectError("Failed to connect Google: " + tokens.error); setGoogleConnectLoading(false); return; }
+
+        const expiry = Date.now() + (tokens.expires_in * 1000);
+        await supabase.from("businesses").update({ google_access_token: tokens.access_token, google_refresh_token: tokens.refresh_token || null, google_token_expiry: expiry }).eq("id", state);
+
+        const locRes = await fetch(`${SERVER}/google/locations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: tokens.access_token }) });
+        const locResult = await locRes.json();
+        if (!locResult.success) { setGoogleConnectError(locResult.error || "Could not fetch Google locations."); setGoogleConnectLoading(false); return; }
+
+        if (locResult.locations.length === 1) {
+          await finishGoogleConnect(state, tokens.access_token, locResult.locations[0]);
+        } else {
+          setGoogleLocationChoices({ businessId: state, accessToken: tokens.access_token, locations: locResult.locations });
+          setShowGoogleLocationPicker(true);
+        }
+      } catch (err) {
+        setGoogleConnectError("Error connecting Google account.");
+      }
+      setGoogleConnectLoading(false);
+    })();
+  }, []);
+
+  const handleConnectGoogleClick = (business) => {
+    window.location.href = buildGoogleConnectUrl(business.id);
+  };
+
+  const finishGoogleConnect = async (businessId, accessToken, loc) => {
+    await supabase.from("businesses").update({ google_account_id: loc.account_id, google_location_id: loc.location_id }).eq("id", businessId);
+    setShowGoogleLocationPicker(false);
+    setGoogleLocationChoices(null);
+    await loadAll();
+    const { data: updated } = await supabase.from("businesses").select("*").eq("id", businessId).single();
+    if (updated) { setView("clients"); await selectBusiness(updated); }
+  };
 
   const loadAll = async () => {
     const { data: biz } = await supabase.from("businesses").select("*").eq("marketing_company_id", data.id).order("name");
@@ -969,6 +1091,15 @@ function MarketingDashboard({ data, onSignOut }) {
         </div>
       )}
 
+      {/* Google location picker — shown after connecting a client's Google account, when that login manages multiple businesses */}
+      {showGoogleLocationPicker && googleLocationChoices && (
+        <LocationPickerModal
+          locations={googleLocationChoices.locations}
+          onSelect={(loc) => finishGoogleConnect(googleLocationChoices.businessId, googleLocationChoices.accessToken, loc)}
+          onClose={() => { setShowGoogleLocationPicker(false); setGoogleLocationChoices(null); }}
+        />
+      )}
+
       {/* Sidebar */}
       <div style={{ width: 200, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, padding: "20px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
         <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 4, color: C.gold, padding: "0 8px 20px" }}>★ REVIEWSEND</div>
@@ -1145,6 +1276,9 @@ function MarketingDashboard({ data, onSignOut }) {
                       business={selectedBusiness}
                       onSaved={(updated) => setSelectedBusiness(updated)}
                       onDeleteClient={(biz) => { setBusinessToDelete(biz); setDeleteConfirmText(""); setShowDeleteModal(true); }}
+                      onConnectGoogle={() => handleConnectGoogleClick(selectedBusiness)}
+                      googleConnectLoading={googleConnectLoading}
+                      googleConnectError={googleConnectError}
                     />
                   </div>
                 )}
@@ -1404,7 +1538,7 @@ function ClientNotesSection({ businessId, authorName }) {
 }
 
 // ── FULL CLIENT SETTINGS (everything the business owner can edit, editable here too) ─
-function ClientSettingsFull({ business, onSaved, onDeleteClient }) {
+function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle, googleConnectLoading, googleConnectError }) {
   const [form, setForm] = useState({
     name: business.name || "", google_link: business.google_link || "", yelp_link: business.yelp_link || "",
     message_template: business.message_template || "",
@@ -1490,8 +1624,8 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient }) {
   };
 
   const disconnectGoogle = async () => {
-    await supabase.from("businesses").update({ google_access_token: null, google_refresh_token: null, google_token_expiry: null }).eq("id", business.id);
-    onSaved && onSaved({ ...business, google_access_token: null });
+    await supabase.from("businesses").update({ google_access_token: null, google_refresh_token: null, google_token_expiry: null, google_account_id: null, google_location_id: null }).eq("id", business.id);
+    onSaved && onSaved({ ...business, google_access_token: null, google_account_id: null, google_location_id: null });
   };
 
   const featureDefs = [["send", "Review requests"], ["google_posts", "Google posts"], ["social", "Instagram & Facebook"], ["analytics", "Analytics"], ["history", "History"]];
@@ -1543,11 +1677,30 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient }) {
       <div style={{ marginBottom: 20 }}><Label>Facebook</Label><input value={form.social_facebook} onChange={set("social_facebook")} style={inputStyle} /></div>
 
       <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Google Business Profile connection</div>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-        <span style={{ fontFamily: font.body, fontSize: 13, color: business.google_access_token ? C.green : C.textMuted }}>
-          {business.google_access_token ? "Connected" : "Not connected — the business owner connects this from their own Settings tab"}
-        </span>
-        {business.google_access_token && <button onClick={disconnectGoogle} style={{ ...ghostBtnStyle, fontSize: 12, padding: "6px 12px", color: "#e74c3c", borderColor: "#e74c3c88" }}>Disconnect</button>}
+      <div style={{ marginBottom: 20 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: business.google_access_token ? 0 : 10 }}>
+          <span style={{ fontFamily: font.body, fontSize: 13, color: business.google_access_token && business.google_location_id ? C.green : business.google_access_token ? "#d97706" : C.textMuted }}>
+            {business.google_access_token && business.google_location_id
+              ? "Connected"
+              : business.google_access_token
+              ? "Connected — no location chosen yet"
+              : "Not connected"}
+          </span>
+          {business.google_access_token && <button onClick={disconnectGoogle} style={{ ...ghostBtnStyle, fontSize: 12, padding: "6px 12px", color: "#e74c3c", borderColor: "#e74c3c88" }}>Disconnect</button>}
+        </div>
+        {!business.google_access_token && onConnectGoogle && (
+          <div>
+            <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, lineHeight: 1.5, marginBottom: 10 }}>
+              You can connect this yourself using your own Google login, as long as you've been added as a Manager (or Owner) on this client's Business Profile.
+            </p>
+            <button onClick={onConnectGoogle} disabled={googleConnectLoading}
+              style={{ padding: "9px 16px", background: "#fff", border: `2px solid ${C.border}`, borderRadius: 10, fontFamily: font.body, fontSize: 13, fontWeight: 700, cursor: googleConnectLoading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", gap: 8, opacity: googleConnectLoading ? 0.6 : 1 }}>
+              <span style={{ width: 20, height: 20, borderRadius: 5, background: "#4A90D9", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#fff" }}>G</span>
+              {googleConnectLoading ? "Connecting…" : "Connect with Google"}
+            </button>
+            {googleConnectError && <p style={{ fontFamily: font.body, fontSize: 12, color: "#e74c3c", marginTop: 8 }}>{googleConnectError}</p>}
+          </div>
+        )}
       </div>
 
       <button onClick={handleSave} disabled={saving} style={{ ...btnStyle, width: "100%", marginBottom: saved ? 8 : 20 }}>{saving ? "Saving…" : "Save settings"}</button>
@@ -1625,7 +1778,63 @@ function AccountManagerDashboard({ data, onSignOut }) {
   const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
   const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
 
+  // Connecting a client's Google Business Profile using the account manager's
+  // own login (works as long as they've been added as a Manager on that client's
+  // listing — see buildGoogleConnectUrl / /google/locations picker flow).
+  const [googleConnectLoading, setGoogleConnectLoading] = useState(false);
+  const [googleConnectError, setGoogleConnectError] = useState("");
+  const [googleLocationChoices, setGoogleLocationChoices] = useState(null); // { businessId, accessToken, locations }
+  const [showGoogleLocationPicker, setShowGoogleLocationPicker] = useState(false);
+
   useEffect(() => { loadAll(); }, []);
+
+  // Handle returning from Google's OAuth screen for a specific client business.
+  useEffect(() => {
+    const code = sessionStorage.getItem("google_oauth_code");
+    const state = sessionStorage.getItem("google_oauth_state");
+    if (!code || !state) return;
+    sessionStorage.removeItem("google_oauth_code");
+    sessionStorage.removeItem("google_oauth_state");
+    (async () => {
+      setGoogleConnectLoading(true);
+      setGoogleConnectError("");
+      try {
+        const tokenRes = await fetch(`${SERVER}/google/token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, redirectUri: GOOGLE_REDIRECT_URI }) });
+        const tokens = await tokenRes.json();
+        if (!tokens.success) { setGoogleConnectError("Failed to connect Google: " + tokens.error); setGoogleConnectLoading(false); return; }
+
+        const expiry = Date.now() + (tokens.expires_in * 1000);
+        await supabase.from("businesses").update({ google_access_token: tokens.access_token, google_refresh_token: tokens.refresh_token || null, google_token_expiry: expiry }).eq("id", state);
+
+        const locRes = await fetch(`${SERVER}/google/locations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: tokens.access_token }) });
+        const locResult = await locRes.json();
+        if (!locResult.success) { setGoogleConnectError(locResult.error || "Could not fetch Google locations."); setGoogleConnectLoading(false); return; }
+
+        if (locResult.locations.length === 1) {
+          await finishGoogleConnect(state, tokens.access_token, locResult.locations[0]);
+        } else {
+          setGoogleLocationChoices({ businessId: state, accessToken: tokens.access_token, locations: locResult.locations });
+          setShowGoogleLocationPicker(true);
+        }
+      } catch (err) {
+        setGoogleConnectError("Error connecting Google account.");
+      }
+      setGoogleConnectLoading(false);
+    })();
+  }, []);
+
+  const handleConnectGoogleClick = (business) => {
+    window.location.href = buildGoogleConnectUrl(business.id);
+  };
+
+  const finishGoogleConnect = async (businessId, accessToken, loc) => {
+    await supabase.from("businesses").update({ google_account_id: loc.account_id, google_location_id: loc.location_id }).eq("id", businessId);
+    setShowGoogleLocationPicker(false);
+    setGoogleLocationChoices(null);
+    await loadAll();
+    const { data: updated } = await supabase.from("businesses").select("*").eq("id", businessId).single();
+    if (updated) { setView("clients"); await selectBusiness(updated); }
+  };
 
   const loadAll = async () => {
     const { data: biz } = await supabase.from("businesses").select("*").eq("account_manager_id", data.id).order("name");
@@ -1727,6 +1936,15 @@ function AccountManagerDashboard({ data, onSignOut }) {
           onClose={() => setModalOpen(false)}
           onSave={handleSaveAppt}
           onDelete={handleDeleteAppt}
+        />
+      )}
+
+      {/* Google location picker — shown after connecting a client's Google account, when that login manages multiple businesses */}
+      {showGoogleLocationPicker && googleLocationChoices && (
+        <LocationPickerModal
+          locations={googleLocationChoices.locations}
+          onSelect={(loc) => finishGoogleConnect(googleLocationChoices.businessId, googleLocationChoices.accessToken, loc)}
+          onClose={() => { setShowGoogleLocationPicker(false); setGoogleLocationChoices(null); }}
         />
       )}
 
@@ -1872,7 +2090,13 @@ function AccountManagerDashboard({ data, onSignOut }) {
                       <AnalyticsTab log={bizMessages} businessName={selectedBusiness.name} photos={bizPhotos} socialLinks={selectedBusiness.social_links || {}} embedded={true} />
                     </div>
 
-                    <ClientSettingsFull business={selectedBusiness} onSaved={(updated) => setSelectedBusiness(updated)} />
+                    <ClientSettingsFull
+                      business={selectedBusiness}
+                      onSaved={(updated) => setSelectedBusiness(updated)}
+                      onConnectGoogle={() => handleConnectGoogleClick(selectedBusiness)}
+                      googleConnectLoading={googleConnectLoading}
+                      googleConnectError={googleConnectError}
+                    />
                   </div>
                 )}
               </div>
@@ -1935,6 +2159,8 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   const [googleData, setGoogleData] = useState(null);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState("");
+  const [locationChoices, setLocationChoices] = useState(null);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
 
   const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const REDIRECT_URI = "https://app.reviewsend.io";
@@ -1949,18 +2175,55 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
     await supabase.from("businesses").update({ google_access_token: null, google_refresh_token: null, google_token_expiry: null, google_account_id: null, google_location_id: null }).eq("id", data.id);
     setGoogleConnected(false);
     setGoogleData(null);
-    setSettings(s => ({ ...s, google_access_token: null }));
+    setSettings(s => ({ ...s, google_access_token: null, google_account_id: null, google_location_id: null }));
   };
 
-  const fetchGoogleData = async (accessToken) => {
+  // Step 1: fetch every location this Google login can see. If there's just
+  // one, connect it automatically. If there's more than one (e.g. a client
+  // managing multiple businesses), show a picker instead of guessing.
+  const fetchLocations = async (accessToken) => {
     setGoogleLoading(true);
     setGoogleError("");
     try {
-      const res = await fetch(`${SERVER}/google/data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken }) });
+      const res = await fetch(`${SERVER}/google/locations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken }) });
       const result = await res.json();
-      if (result.success) { setGoogleData(result); setGoogleConnected(true); }
-      else setGoogleError(result.error || "Could not fetch Google data.");
-    } catch (err) { setGoogleError("Network error fetching Google data."); }
+      if (!result.success) {
+        setGoogleError(result.error || "Could not fetch your Google locations.");
+        setGoogleLoading(false);
+        return;
+      }
+      if (result.locations.length === 1) {
+        await connectLocation(accessToken, result.locations[0]);
+      } else {
+        setLocationChoices(result.locations);
+        setShowLocationPicker(true);
+        setGoogleLoading(false);
+      }
+    } catch (err) {
+      setGoogleError("Network error fetching your Google locations.");
+      setGoogleLoading(false);
+    }
+  };
+
+  // Step 2: pull rating/reviews for the specific chosen location and save
+  // which one this business is linked to.
+  const connectLocation = async (accessToken, loc) => {
+    setGoogleLoading(true);
+    setShowLocationPicker(false);
+    try {
+      const res = await fetch(`${SERVER}/google/data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, account_id: loc.account_id, location_id: loc.location_id }) });
+      const result = await res.json();
+      if (result.success) {
+        setGoogleData(result);
+        setGoogleConnected(true);
+        await supabase.from("businesses").update({ google_account_id: loc.account_id, google_location_id: loc.location_id }).eq("id", data.id);
+        setSettings(s => ({ ...s, google_account_id: loc.account_id, google_location_id: loc.location_id }));
+      } else {
+        setGoogleError(result.error || "Could not connect that location.");
+      }
+    } catch (err) {
+      setGoogleError("Network error connecting that location.");
+    }
     setGoogleLoading(false);
   };
 
@@ -1980,13 +2243,17 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
             await supabase.from("businesses").update({ google_access_token: tokens.access_token, google_refresh_token: tokens.refresh_token || null, google_token_expiry: expiry }).eq("id", data.id);
             setSettings(s => ({ ...s, google_access_token: tokens.access_token }));
             window.history.replaceState({}, "", window.location.pathname);
-            await fetchGoogleData(tokens.access_token);
+            await fetchLocations(tokens.access_token);
           } else { setGoogleError("Failed to connect Google: " + tokens.error); window.history.replaceState({}, "", window.location.pathname); }
         } catch (err) { setGoogleError("Error connecting Google account."); }
         setGoogleLoading(false);
       })();
+    } else if (settings.google_access_token && settings.google_location_id) {
+      // Already connected and a location was previously chosen — go straight there
+      connectLocation(settings.google_access_token, { account_id: settings.google_account_id, location_id: settings.google_location_id });
     } else if (settings.google_access_token) {
-      fetchGoogleData(settings.google_access_token);
+      // Connected but no location saved yet (e.g. an older connection) — show picker
+      fetchLocations(settings.google_access_token);
     }
   }, []);
 
@@ -2163,6 +2430,15 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
           messagePreview={buildMessagePreview()}
           onConfirm={handleSendConfirmed}
           onCancel={() => setShowSendConfirm(false)}
+        />
+      )}
+
+      {/* Google location picker — shown when this login manages multiple businesses */}
+      {showLocationPicker && locationChoices && (
+        <LocationPickerModal
+          locations={locationChoices}
+          onSelect={(loc) => connectLocation(settings.google_access_token, loc)}
+          onClose={() => setShowLocationPicker(false)}
         />
       )}
 
