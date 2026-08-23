@@ -2633,22 +2633,25 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                   {performanceData ? (
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                       {[
-                        { label: "Search Views", data: performanceData.search_views, icon: "eye", color: "#1A5FBF" },
-                        { label: "Calls", data: performanceData.calls, icon: "phone", color: "#1A8C4E" },
-                        { label: "Directions", data: performanceData.direction_requests, icon: "compass", color: "#B5791A" },
-                        { label: "Website Clicks", data: performanceData.website_clicks, icon: "click", color: "#7C3AED" },
+                        { label: "Search Views", data: performanceData.search_views, icon: "eye", color: "#1A5FBF", info: "Times your profile showed up in Google Search or Maps results" },
+                        { label: "Calls", data: performanceData.calls, icon: "phone", color: "#1A8C4E", info: "Calls placed by tapping the call button on your profile" },
+                        { label: "Directions", data: performanceData.direction_requests, icon: "compass", color: "#B5791A", info: "People who tapped \"Directions\" to your business" },
+                        { label: "Website Clicks", data: performanceData.website_clicks, icon: "click", color: "#7C3AED", info: "Visits to your website from your Google profile" },
                       ].map((m) => (
-                        <div key={m.label} style={{ background: "#fff", borderRadius: 14, padding: "14px", border: "1px solid rgba(26,95,191,0.08)", minHeight: 92, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                        <div key={m.label} style={{ background: "#fff", borderRadius: 14, padding: "14px", border: "1px solid rgba(26,95,191,0.08)", display: "flex", flexDirection: "column", gap: 8 }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <MetricIcon type={m.icon} color={m.color} />
+                            <div style={{ width: 30, height: 30, borderRadius: 9, background: `${m.color}14`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                              <MetricIcon type={m.icon} color={m.color} />
+                            </div>
                             <span style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, color: m.data?.delta != null ? (m.data.delta >= 0 ? "#1A8C4E" : "#C0392B") : "transparent" }}>
                               {m.data?.delta != null ? `${m.data.delta >= 0 ? "↑" : "↓"} ${Math.abs(m.data.delta)}%` : "—"}
                             </span>
                           </div>
                           <div>
                             <div style={{ fontFamily: font.display, fontSize: 21, fontWeight: 700, color: "#0D1117", lineHeight: 1 }}>{m.data?.total != null ? m.data.total.toLocaleString() : "0"}</div>
-                            <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.4)", marginTop: 3 }}>{m.label}</div>
+                            <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 600, color: "rgba(13,17,23,0.55)", marginTop: 3 }}>{m.label}</div>
                           </div>
+                          <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.4)", lineHeight: 1.4 }}>{m.info}</div>
                         </div>
                       ))}
                     </div>
@@ -2688,15 +2691,17 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
 
                   {/* Profile views trend */}
                   {performanceData?.monthly_views_trend?.length > 0 && (
-                    <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
-                      <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 10 }}>Profile Views</div>
-                      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 70 }}>
+                    <div style={{ background: "#fff", borderRadius: 14, padding: 18, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
+                      <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 2 }}>Profile Views</div>
+                      <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.4)", marginBottom: 18 }}>How often your business showed up in Google Search and Maps, by month</div>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 150 }}>
                         {(() => {
                           const maxV = Math.max(...performanceData.monthly_views_trend.map(m => m.value), 1);
                           return performanceData.monthly_views_trend.map((m) => (
-                            <div key={m.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-                              <div style={{ width: "100%", background: "#1A5FBF", borderRadius: "4px 4px 2px 2px", height: `${Math.max((m.value / maxV) * 56, 4)}px` }} />
-                              <span style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.45)", fontWeight: 600 }}>
+                            <div key={m.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 6, height: "100%" }}>
+                              <span style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, color: "#0D1117" }}>{m.value.toLocaleString()}</span>
+                              <div style={{ width: "100%", background: "linear-gradient(180deg, #2F6FDB, #1A5FBF)", borderRadius: "6px 6px 2px 2px", height: `${Math.max((m.value / maxV) * 108, 6)}px` }} />
+                              <span style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.5)", fontWeight: 600 }}>
                                 {new Date(m.month + "-01T00:00:00").toLocaleDateString("en-US", { month: "short" })}
                               </span>
                             </div>
