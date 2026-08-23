@@ -2557,10 +2557,54 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
           features.analytics ? (
             <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "24px 20px 20px" }}>
               {googleConnected && googleData && (
-                <div style={{ background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", borderRadius: 20, padding: 20, marginBottom: 14, position: "relative", overflow: "hidden" }}>
-                  <div style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>Google Business Profile</div>
-                  <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 4 }}>{googleData.location_name}</div>
-                  <div style={{ fontFamily: font.body, fontSize: 12, color: "rgba(255,255,255,0.6)" }}>Connected ✓</div>
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{ background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", borderRadius: 20, padding: 20, position: "relative", overflow: "hidden" }}>
+                    <div style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>Google Business Profile</div>
+                    <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 12 }}>{googleData.location_name}</div>
+                    <div style={{ display: "flex", gap: 24 }}>
+                      <div>
+                        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+                          <span style={{ fontFamily: font.display, fontSize: 32, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                            {googleData.rating != null ? googleData.rating.toFixed(1) : "—"}
+                          </span>
+                          <span style={{ color: "#FBBF24", fontSize: 16 }}>★</span>
+                        </div>
+                        <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>Rating</div>
+                      </div>
+                      <div>
+                        <span style={{ fontFamily: font.display, fontSize: 32, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                          {googleData.review_count != null ? googleData.review_count : "—"}
+                        </span>
+                        <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>Reviews</div>
+                      </div>
+                    </div>
+                  </div>
+                  {googleData.reviews && googleData.reviews.length > 0 && (
+                    <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginTop: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
+                      <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 10 }}>Recent Reviews</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        {googleData.reviews.map((r, i) => (
+                          <div key={i} style={{ paddingBottom: i < googleData.reviews.length - 1 ? 12 : 0, borderBottom: i < googleData.reviews.length - 1 ? "1px solid rgba(26,95,191,0.06)" : "none" }}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                              <span style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, color: "#0D1117" }}>{r.reviewer_name}</span>
+                              <span style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.4)" }}>{r.time_ago}</span>
+                            </div>
+                            <div style={{ color: "#D8A83E", fontSize: 12, marginBottom: 4 }}>{"★".repeat(r.star_rating)}{"☆".repeat(5 - r.star_rating)}</div>
+                            {r.comment && <div style={{ fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.65)", lineHeight: 1.5, marginBottom: 6 }}>{r.comment}</div>}
+                            {r.replied ? (
+                              <div style={{ fontFamily: font.body, fontSize: 11, color: "#1A8C4E", display: "flex", alignItems: "center", gap: 4 }}>
+                                ✓ Replied
+                              </div>
+                            ) : (
+                              <div style={{ fontFamily: font.body, fontSize: 11, color: "#B5791A", display: "flex", alignItems: "center", gap: 4 }}>
+                                ○ Not yet replied
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {!googleConnected && (
