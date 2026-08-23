@@ -2161,6 +2161,9 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   const [googleError, setGoogleError] = useState("");
   const [locationChoices, setLocationChoices] = useState(null);
   const [showLocationPicker, setShowLocationPicker] = useState(false);
+  const [performanceData, setPerformanceData] = useState(null);
+  const [searchKeywords, setSearchKeywords] = useState(null);
+  const [ratingHistory, setRatingHistory] = useState([]);
 
   const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
   const REDIRECT_URI = "https://app.reviewsend.io";
@@ -2211,13 +2214,14 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
     setGoogleLoading(true);
     setShowLocationPicker(false);
     try {
-      const res = await fetch(`${SERVER}/google/data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, account_id: loc.account_id, location_id: loc.location_id }) });
+      const res = await fetch(`${SERVER}/google/data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, account_id: loc.account_id, location_id: loc.location_id, business_id: data.id }) });
       const result = await res.json();
       if (result.success) {
         setGoogleData(result);
         setGoogleConnected(true);
         await supabase.from("businesses").update({ google_account_id: loc.account_id, google_location_id: loc.location_id }).eq("id", data.id);
         setSettings(s => ({ ...s, google_account_id: loc.account_id, google_location_id: loc.location_id }));
+        fetchGoogleExtras(accessToken, loc.location_id);
       } else {
         setGoogleError(result.error || "Could not connect that location.");
       }
@@ -2225,6 +2229,30 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
       setGoogleError("Network error connecting that location.");
     }
     setGoogleLoading(false);
+  };
+
+  // Performance metrics (views/calls/directions/website clicks) and search
+  // keywords aren't fatal if they fail — the core rating/reviews data still
+  // works without them, so these run separately and fail silently on error.
+  const fetchGoogleExtras = async (accessToken, locationId) => {
+    fetch(`${SERVER}/google/performance`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, location_id: locationId }) })
+      .then(r => r.json())
+      .then(result => { if (result.success) setPerformanceData(result); })
+      .catch(() => {});
+
+    fetch(`${SERVER}/google/searchkeywords`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, location_id: locationId }) })
+      .then(r => r.json())
+      .then(result => { if (result.success) setSearchKeywords(result.keywords); })
+      .catch(() => {});
+
+    supabase
+      .from("rating_snapshots")
+      .select("snapshot_date, rating, review_count")
+      .eq("business_id", data.id)
+      .order("snapshot_date", { ascending: true })
+      .limit(180)
+      .then(({ data: rows }) => { if (rows) setRatingHistory(rows); })
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -2558,29 +2586,170 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
             <div style={{ position: "absolute", inset: 0, overflowY: "auto", padding: "24px 20px 20px" }}>
               {googleConnected && googleData && (
                 <div style={{ marginBottom: 14 }}>
-                  <div style={{ background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", borderRadius: 20, padding: 20, position: "relative", overflow: "hidden" }}>
-                    <div style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 6 }}>Google Business Profile</div>
-                    <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 700, color: "#fff", marginBottom: 12 }}>{googleData.location_name}</div>
-                    <div style={{ display: "flex", gap: 24 }}>
+
+                  {/* Snapshot hero */}
+                  <div style={{ background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", borderRadius: 20, padding: 20, marginBottom: 12 }}>
+                    <div style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>{googleData.location_name}</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                       <div>
                         <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                          <span style={{ fontFamily: font.display, fontSize: 32, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                          <span style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
                             {googleData.rating != null ? googleData.rating.toFixed(1) : "—"}
                           </span>
-                          <span style={{ color: "#FBBF24", fontSize: 16 }}>★</span>
+                          <span style={{ color: "#FBBF24", fontSize: 14 }}>★</span>
                         </div>
-                        <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>Rating</div>
+                        <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.55)", marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>Rating</div>
                       </div>
                       <div>
-                        <span style={{ fontFamily: font.display, fontSize: 32, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                        <span style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
                           {googleData.review_count != null ? googleData.review_count : "—"}
                         </span>
-                        <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(255,255,255,0.6)", marginTop: 2 }}>Reviews</div>
+                        <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.55)", marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>Total Reviews</div>
+                      </div>
+                      <div>
+                        <span style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                          {googleData.new_this_month != null ? `+${googleData.new_this_month}` : "—"}
+                        </span>
+                        <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.55)", marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>New This Month</div>
+                      </div>
+                      <div>
+                        <span style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                          {googleData.response_rate != null ? `${googleData.response_rate}%` : "—"}
+                        </span>
+                        <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.55)", marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>Response Rate</div>
                       </div>
                     </div>
                   </div>
+
+                  {/* Performance strip */}
+                  {performanceData ? (
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                      {[
+                        { label: "Search Views", data: performanceData.search_views, icon: "👁" },
+                        { label: "Calls", data: performanceData.calls, icon: "📞" },
+                        { label: "Directions", data: performanceData.direction_requests, icon: "🧭" },
+                        { label: "Website Clicks", data: performanceData.website_clicks, icon: "🖱" },
+                      ].map((m) => (
+                        <div key={m.label} style={{ background: "#fff", borderRadius: 14, padding: "12px 14px", border: "1px solid rgba(26,95,191,0.08)" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                            <span style={{ fontSize: 14 }}>{m.icon}</span>
+                            {m.data?.delta != null && (
+                              <span style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, color: m.data.delta >= 0 ? "#1A8C4E" : "#C0392B" }}>
+                                {m.data.delta >= 0 ? "↑" : "↓"} {Math.abs(m.data.delta)}%
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 700, color: "#0D1117", lineHeight: 1 }}>{m.data?.total != null ? m.data.total.toLocaleString() : "—"}</div>
+                          <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.4)", marginTop: 2 }}>{m.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)", textAlign: "center" }}>
+                      <span style={{ fontFamily: font.body, fontSize: 12, color: "rgba(13,17,23,0.4)" }}>Loading performance metrics…</span>
+                    </div>
+                  )}
+
+                  {/* Rating trend (from our own stored snapshots — Google doesn't expose rating history) */}
+                  {ratingHistory.length >= 2 && (
+                    <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
+                      <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 10 }}>Rating Trend</div>
+                      {(() => {
+                        const vals = ratingHistory.map(r => r.rating).filter(v => v != null);
+                        const min = Math.min(...vals) - 0.1;
+                        const max = Math.max(...vals) + 0.1;
+                        const range = max - min || 1;
+                        const w = 280, h = 60;
+                        const points = ratingHistory.map((r, i) => {
+                          const x = (i / (ratingHistory.length - 1)) * w;
+                          const y = h - ((r.rating - min) / range) * h;
+                          return `${x},${y}`;
+                        }).join(" ");
+                        return (
+                          <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 60 }} preserveAspectRatio="none">
+                            <polyline points={points} fill="none" stroke="#1A5FBF" strokeWidth="2" />
+                          </svg>
+                        );
+                      })()}
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                        <span style={{ fontFamily: font.mono, fontSize: 10, color: "rgba(13,17,23,0.35)" }}>{ratingHistory[0]?.snapshot_date}</span>
+                        <span style={{ fontFamily: font.mono, fontSize: 10, color: "rgba(13,17,23,0.35)" }}>{ratingHistory[ratingHistory.length - 1]?.snapshot_date}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Profile views trend */}
+                  {performanceData?.monthly_views_trend?.length > 0 && (
+                    <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
+                      <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 10 }}>Profile Views</div>
+                      <div style={{ display: "flex", alignItems: "flex-end", gap: 6, height: 70 }}>
+                        {(() => {
+                          const maxV = Math.max(...performanceData.monthly_views_trend.map(m => m.value), 1);
+                          return performanceData.monthly_views_trend.map((m) => (
+                            <div key={m.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                              <div style={{ width: "100%", background: "#1A5FBF", borderRadius: "4px 4px 2px 2px", height: `${Math.max((m.value / maxV) * 56, 4)}px` }} />
+                              <span style={{ fontFamily: font.mono, fontSize: 9, color: "rgba(13,17,23,0.4)" }}>{m.month.slice(5)}</span>
+                            </div>
+                          ));
+                        })()}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Search keywords */}
+                  {searchKeywords && searchKeywords.length > 0 && (
+                    <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
+                      <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 2 }}>What People Search To Find You</div>
+                      <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.35)", marginBottom: 10 }}>Actual terms typed into Google, last 90 days</div>
+                      {(() => {
+                        const maxK = Math.max(...searchKeywords.map(k => typeof k.impressions === "number" ? k.impressions : 60));
+                        return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {searchKeywords.slice(0, 8).map((k) => {
+                              const numeric = typeof k.impressions === "number" ? k.impressions : 60;
+                              const widthPct = (numeric / maxK) * 100;
+                              return (
+                                <div key={k.term} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <span style={{ fontFamily: font.body, fontSize: 12, color: "#0D1117", flexShrink: 0, width: 130, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{k.term}</span>
+                                  <div style={{ flex: 1, height: 6, background: "#EEF3FA", borderRadius: 99, overflow: "hidden" }}>
+                                    <div style={{ width: `${widthPct}%`, height: "100%", background: "#1A5FBF", borderRadius: 99 }} />
+                                  </div>
+                                  <span style={{ fontFamily: font.mono, fontSize: 10, color: "rgba(13,17,23,0.4)", width: 44, textAlign: "right", flexShrink: 0 }}>
+                                    {typeof k.impressions === "number" ? k.impressions.toLocaleString() : k.impressions}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Sentiment breakdown */}
+                  {googleData.sentiment && googleData.sentiment_based_on > 0 && (
+                    <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
+                      <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 2 }}>Sentiment Breakdown</div>
+                      <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.35)", marginBottom: 10 }}>Based on your last {googleData.sentiment_based_on} reviews</div>
+                      {(() => {
+                        const maxS = Math.max(...Object.values(googleData.sentiment), 1);
+                        return [5, 4, 3, 2, 1].map((star) => (
+                          <div key={star} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                            <span style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.5)", width: 10 }}>{star}</span>
+                            <span style={{ color: "#D8A83E", fontSize: 10 }}>★</span>
+                            <div style={{ flex: 1, height: 8, background: "#F4F7FB", borderRadius: 99, overflow: "hidden" }}>
+                              <div style={{ width: `${(googleData.sentiment[star] / maxS) * 100}%`, height: "100%", background: star >= 4 ? "#1A5FBF" : star === 3 ? "#B9C4D6" : "#C0392B", borderRadius: 99 }} />
+                            </div>
+                            <span style={{ fontFamily: font.mono, fontSize: 10, color: "rgba(13,17,23,0.4)", width: 20, textAlign: "right" }}>{googleData.sentiment[star]}</span>
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                  )}
+
+                  {/* Recent reviews */}
                   {googleData.reviews && googleData.reviews.length > 0 && (
-                    <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginTop: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
+                    <div style={{ background: "#fff", borderRadius: 16, padding: 16, border: "1px solid rgba(26,95,191,0.08)" }}>
                       <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 10 }}>Recent Reviews</div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                         {googleData.reviews.map((r, i) => (
@@ -2615,6 +2784,11 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                     <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.45)" }}>See your real star rating and reviews</div>
                   </div>
                   <button onClick={() => setTab("settings")} style={{ padding: "8px 14px", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", color: "#fff", border: "none", borderRadius: 10, fontFamily: font.body, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Connect →</button>
+                </div>
+              )}
+              {googleConnected && googleData && (
+                <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(13,17,23,0.35)", margin: "20px 0 10px" }}>
+                  ReviewSend Activity
                 </div>
               )}
               <AnalyticsTab log={log} businessName={settings.name} photos={[]} socialLinks={settings.social_links || {}} onNavigate={setTab} embedded={true} />
