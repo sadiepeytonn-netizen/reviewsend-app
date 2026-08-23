@@ -2588,64 +2588,72 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                 <div style={{ marginBottom: 14 }}>
 
                   {/* Snapshot hero */}
-                  <div style={{ background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", borderRadius: 20, padding: 20, marginBottom: 12 }}>
-                    <div style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", color: "rgba(255,255,255,0.5)", marginBottom: 10 }}>{googleData.location_name}</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                      <div>
-                        <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
-                          <span style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
-                            {googleData.rating != null ? googleData.rating.toFixed(1) : "—"}
-                          </span>
-                          <span style={{ color: "#FBBF24", fontSize: 14 }}>★</span>
+                  <div style={{ background: "linear-gradient(135deg, #14345e, #0a1f3d)", borderRadius: 20, padding: "22px 22px 20px" }}>
+                    <div style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, letterSpacing: 2.5, textTransform: "uppercase", color: "rgba(255,255,255,0.45)", marginBottom: 4 }}>Google Business Profile</div>
+                    <div style={{ fontFamily: font.display, fontSize: 17, fontWeight: 700, color: "#fff", marginBottom: 18 }}>{googleData.location_name}</div>
+
+                    {googleData.review_count > 0 ? (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: 20, columnGap: 16 }}>
+                        <div>
+                          <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
+                            <span style={{ fontFamily: font.display, fontSize: 30, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                              {googleData.rating != null ? googleData.rating.toFixed(1) : "—"}
+                            </span>
+                            <span style={{ color: "#F5C242", fontSize: 15 }}>★</span>
+                          </div>
+                          <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 3, textTransform: "uppercase", letterSpacing: 1.2 }}>Rating</div>
                         </div>
-                        <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.55)", marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>Rating</div>
+                        <div>
+                          <span style={{ fontFamily: font.display, fontSize: 30, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                            {googleData.review_count.toLocaleString()}
+                          </span>
+                          <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 3, textTransform: "uppercase", letterSpacing: 1.2 }}>Total Reviews</div>
+                        </div>
+                        <div>
+                          <span style={{ fontFamily: font.display, fontSize: 30, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                            {googleData.new_this_month != null ? `+${googleData.new_this_month}` : "0"}
+                          </span>
+                          <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 3, textTransform: "uppercase", letterSpacing: 1.2 }}>New This Month</div>
+                        </div>
+                        <div>
+                          <span style={{ fontFamily: font.display, fontSize: 30, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                            {googleData.response_rate != null ? `${googleData.response_rate}%` : "—"}
+                          </span>
+                          <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 3, textTransform: "uppercase", letterSpacing: 1.2 }}>Response Rate</div>
+                        </div>
                       </div>
-                      <div>
-                        <span style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
-                          {googleData.review_count != null ? googleData.review_count : "—"}
-                        </span>
-                        <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.55)", marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>Total Reviews</div>
+                    ) : (
+                      <div style={{ fontFamily: font.body, fontSize: 13, color: "rgba(255,255,255,0.55)", padding: "4px 0 2px" }}>
+                        No reviews on this profile yet — rating and review stats will appear here once you get your first one.
                       </div>
-                      <div>
-                        <span style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
-                          {googleData.new_this_month != null ? `+${googleData.new_this_month}` : "—"}
-                        </span>
-                        <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.55)", marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>New This Month</div>
-                      </div>
-                      <div>
-                        <span style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
-                          {googleData.response_rate != null ? `${googleData.response_rate}%` : "—"}
-                        </span>
-                        <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.55)", marginTop: 2, textTransform: "uppercase", letterSpacing: 1 }}>Response Rate</div>
-                      </div>
-                    </div>
+                    )}
                   </div>
 
                   {/* Performance strip */}
                   {performanceData ? (
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
                       {[
-                        { label: "Search Views", data: performanceData.search_views, icon: "👁" },
-                        { label: "Calls", data: performanceData.calls, icon: "📞" },
-                        { label: "Directions", data: performanceData.direction_requests, icon: "🧭" },
-                        { label: "Website Clicks", data: performanceData.website_clicks, icon: "🖱" },
+                        { label: "Search Views", data: performanceData.search_views, icon: "eye", color: "#1A5FBF" },
+                        { label: "Calls", data: performanceData.calls, icon: "phone", color: "#1A8C4E" },
+                        { label: "Directions", data: performanceData.direction_requests, icon: "compass", color: "#B5791A" },
+                        { label: "Website Clicks", data: performanceData.website_clicks, icon: "click", color: "#7C3AED" },
                       ].map((m) => (
-                        <div key={m.label} style={{ background: "#fff", borderRadius: 14, padding: "12px 14px", border: "1px solid rgba(26,95,191,0.08)" }}>
-                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                            <span style={{ fontSize: 14 }}>{m.icon}</span>
-                            {m.data?.delta != null && (
-                              <span style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, color: m.data.delta >= 0 ? "#1A8C4E" : "#C0392B" }}>
-                                {m.data.delta >= 0 ? "↑" : "↓"} {Math.abs(m.data.delta)}%
-                              </span>
-                            )}
+                        <div key={m.label} style={{ background: "#fff", borderRadius: 14, padding: "14px", border: "1px solid rgba(26,95,191,0.08)", minHeight: 92, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <MetricIcon type={m.icon} color={m.color} />
+                            <span style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, color: m.data?.delta != null ? (m.data.delta >= 0 ? "#1A8C4E" : "#C0392B") : "transparent" }}>
+                              {m.data?.delta != null ? `${m.data.delta >= 0 ? "↑" : "↓"} ${Math.abs(m.data.delta)}%` : "—"}
+                            </span>
                           </div>
-                          <div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 700, color: "#0D1117", lineHeight: 1 }}>{m.data?.total != null ? m.data.total.toLocaleString() : "—"}</div>
-                          <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.4)", marginTop: 2 }}>{m.label}</div>
+                          <div>
+                            <div style={{ fontFamily: font.display, fontSize: 21, fontWeight: 700, color: "#0D1117", lineHeight: 1 }}>{m.data?.total != null ? m.data.total.toLocaleString() : "0"}</div>
+                            <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.4)", marginTop: 3 }}>{m.label}</div>
+                          </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div style={{ background: "#fff", borderRadius: 14, padding: 14, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)", textAlign: "center" }}>
+                    <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)", textAlign: "center" }}>
                       <span style={{ fontFamily: font.body, fontSize: 12, color: "rgba(13,17,23,0.4)" }}>Loading performance metrics…</span>
                     </div>
                   )}
@@ -2688,7 +2696,9 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                           return performanceData.monthly_views_trend.map((m) => (
                             <div key={m.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                               <div style={{ width: "100%", background: "#1A5FBF", borderRadius: "4px 4px 2px 2px", height: `${Math.max((m.value / maxV) * 56, 4)}px` }} />
-                              <span style={{ fontFamily: font.mono, fontSize: 9, color: "rgba(13,17,23,0.4)" }}>{m.month.slice(5)}</span>
+                              <span style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.45)", fontWeight: 600 }}>
+                                {new Date(m.month + "-01T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+                              </span>
                             </div>
                           ));
                         })()}
@@ -2700,21 +2710,22 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                   {searchKeywords && searchKeywords.length > 0 && (
                     <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
                       <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 2 }}>What People Search To Find You</div>
-                      <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.35)", marginBottom: 10 }}>Actual terms typed into Google, last 90 days</div>
+                      <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.35)", marginBottom: 14 }}>Actual terms typed into Google, last 90 days</div>
                       {(() => {
                         const maxK = Math.max(...searchKeywords.map(k => typeof k.impressions === "number" ? k.impressions : 60));
                         return (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            {searchKeywords.slice(0, 8).map((k) => {
+                          <div style={{ display: "flex", flexDirection: "column" }}>
+                            {searchKeywords.slice(0, 8).map((k, i) => {
                               const numeric = typeof k.impressions === "number" ? k.impressions : 60;
-                              const widthPct = (numeric / maxK) * 100;
+                              const widthPct = Math.max((numeric / maxK) * 100, 4);
                               return (
-                                <div key={k.term} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                  <span style={{ fontFamily: font.body, fontSize: 12, color: "#0D1117", flexShrink: 0, width: 130, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{k.term}</span>
+                                <div key={k.term} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < Math.min(searchKeywords.length, 8) - 1 ? "1px solid #F4F7FB" : "none" }}>
+                                  <span style={{ fontFamily: font.mono, fontSize: 10, color: "rgba(13,17,23,0.3)", width: 14, flexShrink: 0 }}>{i + 1}</span>
+                                  <span style={{ fontFamily: font.body, fontSize: 13, color: "#0D1117", flexShrink: 0, width: 140, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={k.term}>{k.term}</span>
                                   <div style={{ flex: 1, height: 6, background: "#EEF3FA", borderRadius: 99, overflow: "hidden" }}>
                                     <div style={{ width: `${widthPct}%`, height: "100%", background: "#1A5FBF", borderRadius: 99 }} />
                                   </div>
-                                  <span style={{ fontFamily: font.mono, fontSize: 10, color: "rgba(13,17,23,0.4)", width: 44, textAlign: "right", flexShrink: 0 }}>
+                                  <span style={{ fontFamily: font.body, fontSize: 11, fontWeight: 600, color: "rgba(13,17,23,0.5)", width: 46, textAlign: "right", flexShrink: 0 }}>
                                     {typeof k.impressions === "number" ? k.impressions.toLocaleString() : k.impressions}
                                   </span>
                                 </div>
@@ -2787,9 +2798,12 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                 </div>
               )}
               {googleConnected && googleData && (
-                <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(13,17,23,0.35)", margin: "20px 0 10px" }}>
-                  ReviewSend Activity
-                </div>
+                <>
+                  <div style={{ height: 1, background: "rgba(26,95,191,0.08)", margin: "24px 0 0" }} />
+                  <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(13,17,23,0.35)", margin: "16px 0 10px" }}>
+                    ReviewSend Activity
+                  </div>
+                </>
               )}
               <AnalyticsTab log={log} businessName={settings.name} photos={[]} socialLinks={settings.social_links || {}} onNavigate={setTab} embedded={true} />
             </div>
@@ -3719,6 +3733,26 @@ const ghostBtnStyle = { padding: "12px 24px", background: "none", color: "#6B7A9
 
 function Label({ children }) {
   return <div style={{ fontFamily: "'Cormorant Garamond', Georgia, serif", fontSize: 11, letterSpacing: 3, color: "#1A3A6B", textTransform: "uppercase", marginBottom: 8, fontWeight: "700" }}>{children}</div>;
+}
+
+// Small monochrome icons for the performance strip — kept as plain inline SVG
+// (matching the chat-bubble icon already used elsewhere) rather than pulling
+// in an icon library dependency.
+function MetricIcon({ type, color }) {
+  const common = { width: 16, height: 16, viewBox: "0 0 24 24", fill: "none", stroke: color, strokeWidth: 2, strokeLinecap: "round", strokeLinejoin: "round" };
+  if (type === "eye") return (
+    <svg {...common}><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z" /><circle cx="12" cy="12" r="3" /></svg>
+  );
+  if (type === "phone") return (
+    <svg {...common}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
+  );
+  if (type === "compass") return (
+    <svg {...common}><circle cx="12" cy="12" r="10" /><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" /></svg>
+  );
+  if (type === "click") return (
+    <svg {...common}><path d="M9 9l11 4-4.5 2-2 4.5L9 9z" /><path d="M2 2l4 4" /><path d="M2 8V2h6" /></svg>
+  );
+  return null;
 }
 
 function PageHeader({ title, sub }) {
