@@ -2588,7 +2588,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                 <div style={{ marginBottom: 14 }}>
 
                   {/* Snapshot hero */}
-                  <div style={{ background: "linear-gradient(135deg, #14345e, #0a1f3d)", borderRadius: 20, padding: "22px 22px 20px" }}>
+                  <div style={{ background: "linear-gradient(135deg, #14345e, #0a1f3d)", borderRadius: 20, padding: "22px 22px 20px", marginBottom: 20 }}>
                     <div style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, letterSpacing: 2.5, textTransform: "uppercase", color: "rgba(255,255,255,0.45)", marginBottom: 4 }}>Google Business Profile</div>
                     <div style={{ fontFamily: font.display, fontSize: 17, fontWeight: 700, color: "#fff", marginBottom: 18 }}>{googleData.location_name}</div>
 
