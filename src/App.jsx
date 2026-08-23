@@ -2631,7 +2631,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
 
                   {/* Performance strip */}
                   {performanceData ? (
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 12 }}>
                       {[
                         { label: "Search Views", data: performanceData.search_views, icon: "eye", color: "#1A5FBF", info: "Times your profile showed up in Google Search or Maps results" },
                         { label: "Calls", data: performanceData.calls, icon: "phone", color: "#1A8C4E", info: "Calls placed by tapping the call button on your profile" },
