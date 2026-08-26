@@ -2629,41 +2629,41 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
 
                   {/* Snapshot hero */}
                   <div style={{ background: "linear-gradient(135deg, #14345e, #0a1f3d)", borderRadius: 20, padding: "22px 22px 20px", marginBottom: 20 }}>
-                    <div style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, letterSpacing: 2.5, textTransform: "uppercase", color: "rgba(255,255,255,0.45)", marginBottom: 4 }}>Google Business Profile</div>
-                    <div style={{ fontFamily: font.display, fontSize: 17, fontWeight: 700, color: "#fff", marginBottom: 18 }}>{googleData.location_name}</div>
+                    <div style={{ fontFamily: font.body, fontSize: 12, fontWeight: 700, letterSpacing: 2.5, textTransform: "uppercase", color: "rgba(255,255,255,0.45)", marginBottom: 4 }}>Google Business Profile</div>
+                    <div style={{ fontFamily: font.display, fontSize: 19, fontWeight: 700, color: "#fff", marginBottom: 18 }}>{googleData.location_name}</div>
 
                     {googleData.review_count > 0 ? (
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", rowGap: 20, columnGap: 16 }}>
                         <div>
                           <div style={{ display: "flex", alignItems: "baseline", gap: 5 }}>
-                            <span style={{ fontFamily: font.display, fontSize: 30, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                            <span style={{ fontFamily: font.display, fontSize: 32, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
                               {googleData.rating != null ? googleData.rating.toFixed(1) : "—"}
                             </span>
-                            <span style={{ color: "#F5C242", fontSize: 15 }}>★</span>
+                            <span style={{ color: "#F5C242", fontSize: 17 }}>★</span>
                           </div>
-                          <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 3, textTransform: "uppercase", letterSpacing: 1.2 }}>Rating</div>
+                          <div style={{ fontFamily: font.body, fontSize: 12, color: "rgba(255,255,255,0.55)", marginTop: 3, textTransform: "uppercase", letterSpacing: 1.2 }}>Rating</div>
                         </div>
                         <div>
-                          <span style={{ fontFamily: font.display, fontSize: 30, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                          <span style={{ fontFamily: font.display, fontSize: 32, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
                             {googleData.review_count.toLocaleString()}
                           </span>
-                          <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 3, textTransform: "uppercase", letterSpacing: 1.2 }}>Total Reviews</div>
+                          <div style={{ fontFamily: font.body, fontSize: 12, color: "rgba(255,255,255,0.55)", marginTop: 3, textTransform: "uppercase", letterSpacing: 1.2 }}>Total Reviews</div>
                         </div>
                         <div>
-                          <span style={{ fontFamily: font.display, fontSize: 30, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                          <span style={{ fontFamily: font.display, fontSize: 32, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
                             {googleData.new_this_month != null ? `+${googleData.new_this_month}` : "0"}
                           </span>
-                          <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 3, textTransform: "uppercase", letterSpacing: 1.2 }}>New This Month</div>
+                          <div style={{ fontFamily: font.body, fontSize: 12, color: "rgba(255,255,255,0.55)", marginTop: 3, textTransform: "uppercase", letterSpacing: 1.2 }}>New This Month</div>
                         </div>
                         <div>
-                          <span style={{ fontFamily: font.display, fontSize: 30, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
+                          <span style={{ fontFamily: font.display, fontSize: 32, fontWeight: 700, color: "#fff", lineHeight: 1 }}>
                             {googleData.response_rate != null ? `${googleData.response_rate}%` : "—"}
                           </span>
-                          <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(255,255,255,0.5)", marginTop: 3, textTransform: "uppercase", letterSpacing: 1.2 }}>Response Rate</div>
+                          <div style={{ fontFamily: font.body, fontSize: 12, color: "rgba(255,255,255,0.55)", marginTop: 3, textTransform: "uppercase", letterSpacing: 1.2 }}>Response Rate</div>
                         </div>
                       </div>
                     ) : (
-                      <div style={{ fontFamily: font.body, fontSize: 13, color: "rgba(255,255,255,0.55)", padding: "4px 0 2px" }}>
+                      <div style={{ fontFamily: font.body, fontSize: 14, color: "rgba(255,255,255,0.55)", padding: "4px 0 2px" }}>
                         No reviews on this profile yet — rating and review stats will appear here once you get your first one.
                       </div>
                     )}
@@ -2680,83 +2680,94 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                       ].map((m) => (
                         <div key={m.label} style={{ background: "#fff", borderRadius: 14, padding: "14px", border: "1px solid rgba(26,95,191,0.08)", display: "flex", flexDirection: "column", gap: 8 }}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                            <div style={{ width: 30, height: 30, borderRadius: 9, background: `${m.color}14`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                            <div style={{ width: 32, height: 32, borderRadius: 9, background: `${m.color}14`, display: "flex", alignItems: "center", justifyContent: "center" }}>
                               <MetricIcon type={m.icon} color={m.color} />
                             </div>
-                            <span style={{ fontFamily: font.body, fontSize: 10, fontWeight: 700, color: m.data?.delta != null ? (m.data.delta >= 0 ? "#1A8C4E" : "#C0392B") : "transparent" }}>
+                            <span style={{ fontFamily: font.body, fontSize: 12, fontWeight: 700, color: m.data?.delta != null ? (m.data.delta >= 0 ? "#1A8C4E" : "#C0392B") : "transparent" }}>
                               {m.data?.delta != null ? `${m.data.delta >= 0 ? "↑" : "↓"} ${Math.abs(m.data.delta)}%` : "—"}
                             </span>
                           </div>
                           <div>
-                            <div style={{ fontFamily: font.display, fontSize: 21, fontWeight: 700, color: "#0D1117", lineHeight: 1 }}>{m.data?.total != null ? m.data.total.toLocaleString() : "0"}</div>
-                            <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 600, color: "rgba(13,17,23,0.55)", marginTop: 3 }}>{m.label}</div>
+                            <div style={{ fontFamily: font.display, fontSize: 23, fontWeight: 700, color: "#0D1117", lineHeight: 1 }}>{m.data?.total != null ? m.data.total.toLocaleString() : "0"}</div>
+                            <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 600, color: "rgba(13,17,23,0.6)", marginTop: 3 }}>{m.label}</div>
                           </div>
-                          <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.4)", lineHeight: 1.4 }}>{m.info}</div>
+                          <div style={{ fontFamily: font.body, fontSize: 12, color: "rgba(13,17,23,0.45)", lineHeight: 1.4 }}>{m.info}</div>
                         </div>
                       ))}
                     </div>
                   ) : (
                     <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)", textAlign: "center" }}>
-                      <span style={{ fontFamily: font.body, fontSize: 12, color: "rgba(13,17,23,0.4)" }}>Loading performance metrics…</span>
+                      <span style={{ fontFamily: font.body, fontSize: 14, color: "rgba(13,17,23,0.4)" }}>Loading performance metrics…</span>
                     </div>
                   )}
 
                   {/* Rating trend (from our own stored snapshots — Google doesn't expose rating history) */}
-                  {ratingHistory.length >= 2 && (
-                    <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
-                      <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 10 }}>Rating Trend</div>
-                      {(() => {
-                        const vals = ratingHistory.map(r => r.rating).filter(v => v != null);
-                        const min = Math.min(...vals) - 0.1;
-                        const max = Math.max(...vals) + 0.1;
-                        const range = max - min || 1;
-                        const w = 280, h = 60;
-                        const points = ratingHistory.map((r, i) => {
-                          const x = (i / (ratingHistory.length - 1)) * w;
-                          const y = h - ((r.rating - min) / range) * h;
-                          return `${x},${y}`;
-                        }).join(" ");
-                        return (
-                          <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 60 }} preserveAspectRatio="none">
-                            <polyline points={points} fill="none" stroke="#1A5FBF" strokeWidth="2" />
-                          </svg>
-                        );
-                      })()}
-                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                        <span style={{ fontFamily: font.mono, fontSize: 10, color: "rgba(13,17,23,0.35)" }}>{ratingHistory[0]?.snapshot_date}</span>
-                        <span style={{ fontFamily: font.mono, fontSize: 10, color: "rgba(13,17,23,0.35)" }}>{ratingHistory[ratingHistory.length - 1]?.snapshot_date}</span>
+                  <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
+                    <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.45)", marginBottom: 10 }}>Rating Trend</div>
+                    {ratingHistory.length >= 2 ? (
+                      <>
+                        {(() => {
+                          const vals = ratingHistory.map(r => r.rating).filter(v => v != null);
+                          const min = Math.min(...vals) - 0.1;
+                          const max = Math.max(...vals) + 0.1;
+                          const range = max - min || 1;
+                          const w = 280, h = 60;
+                          const points = ratingHistory.map((r, i) => {
+                            const x = (i / (ratingHistory.length - 1)) * w;
+                            const y = h - ((r.rating - min) / range) * h;
+                            return `${x},${y}`;
+                          }).join(" ");
+                          return (
+                            <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 60 }} preserveAspectRatio="none">
+                              <polyline points={points} fill="none" stroke="#1A5FBF" strokeWidth="2" />
+                            </svg>
+                          );
+                        })()}
+                        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                          <span style={{ fontFamily: font.mono, fontSize: 12, color: "rgba(13,17,23,0.4)" }}>{ratingHistory[0]?.snapshot_date}</span>
+                          <span style={{ fontFamily: font.mono, fontSize: 12, color: "rgba(13,17,23,0.4)" }}>{ratingHistory[ratingHistory.length - 1]?.snapshot_date}</span>
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ padding: "16px 0", textAlign: "center" }}>
+                        <div style={{ fontFamily: font.body, fontSize: 14, color: "rgba(13,17,23,0.5)", marginBottom: 4 }}>Not enough data yet</div>
+                        <div style={{ fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.4)", maxWidth: 320, margin: "0 auto" }}>Google doesn't give us rating history directly — we're tracking it ourselves starting now, so this chart fills in over the next few days.</div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
 
                   {/* Profile views trend */}
-                  {performanceData?.monthly_views_trend?.length > 0 && (
-                    <div style={{ background: "#fff", borderRadius: 14, padding: 18, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
-                      <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 2 }}>Profile Views</div>
-                      <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.4)", marginBottom: 18 }}>How often your business showed up in Google Search and Maps, by month</div>
+                  <div style={{ background: "#fff", borderRadius: 14, padding: 18, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
+                    <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.45)", marginBottom: 2 }}>Profile Views</div>
+                    <div style={{ fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.45)", marginBottom: 18 }}>How often your business showed up in Google Search and Maps, by month</div>
+                    {performanceData?.monthly_views_trend?.length > 0 ? (
                       <div style={{ display: "flex", alignItems: "flex-end", gap: 10, height: 150 }}>
                         {(() => {
                           const maxV = Math.max(...performanceData.monthly_views_trend.map(m => m.value), 1);
                           return performanceData.monthly_views_trend.map((m) => (
                             <div key={m.month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-end", gap: 6, height: "100%" }}>
-                              <span style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, color: "#0D1117" }}>{m.value.toLocaleString()}</span>
+                              <span style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, color: "#0D1117" }}>{m.value.toLocaleString()}</span>
                               <div style={{ width: "100%", background: "linear-gradient(180deg, #2F6FDB, #1A5FBF)", borderRadius: "6px 6px 2px 2px", height: `${Math.max((m.value / maxV) * 108, 6)}px` }} />
-                              <span style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.5)", fontWeight: 600 }}>
+                              <span style={{ fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.55)", fontWeight: 600 }}>
                                 {new Date(m.month + "-01T00:00:00").toLocaleDateString("en-US", { month: "short" })}
                               </span>
                             </div>
                           ));
                         })()}
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <div style={{ padding: "8px 0 4px", textAlign: "center" }}>
+                        <div style={{ fontFamily: font.body, fontSize: 14, color: "rgba(13,17,23,0.5)" }}>No profile view data yet</div>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Search keywords */}
-                  {searchKeywords && searchKeywords.length > 0 && (
-                    <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
-                      <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 2 }}>What People Search To Find You</div>
-                      <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.35)", marginBottom: 14 }}>Actual terms typed into Google, last 90 days</div>
-                      {(() => {
+                  <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
+                    <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.45)", marginBottom: 2 }}>What People Search To Find You</div>
+                    <div style={{ fontFamily: font.body, fontSize: 12, color: "rgba(13,17,23,0.4)", marginBottom: 14 }}>Actual terms typed into Google, last 90 days</div>
+                    {searchKeywords && searchKeywords.length > 0 ? (
+                      (() => {
                         const maxK = Math.max(...searchKeywords.map(k => typeof k.impressions === "number" ? k.impressions : 60));
                         return (
                           <div style={{ display: "flex", flexDirection: "column" }}>
@@ -2765,12 +2776,12 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                               const widthPct = Math.max((numeric / maxK) * 100, 4);
                               return (
                                 <div key={k.term} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: i < Math.min(searchKeywords.length, 8) - 1 ? "1px solid #F4F7FB" : "none" }}>
-                                  <span style={{ fontFamily: font.mono, fontSize: 10, color: "rgba(13,17,23,0.3)", width: 14, flexShrink: 0 }}>{i + 1}</span>
-                                  <span style={{ fontFamily: font.body, fontSize: 13, color: "#0D1117", flexShrink: 0, width: 140, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={k.term}>{k.term}</span>
+                                  <span style={{ fontFamily: font.mono, fontSize: 12, color: "rgba(13,17,23,0.35)", width: 14, flexShrink: 0 }}>{i + 1}</span>
+                                  <span style={{ fontFamily: font.body, fontSize: 15, color: "#0D1117", flexShrink: 0, width: 140, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={k.term}>{k.term}</span>
                                   <div style={{ flex: 1, height: 6, background: "#EEF3FA", borderRadius: 99, overflow: "hidden" }}>
                                     <div style={{ width: `${widthPct}%`, height: "100%", background: "#1A5FBF", borderRadius: 99 }} />
                                   </div>
-                                  <span style={{ fontFamily: font.body, fontSize: 11, fontWeight: 600, color: "rgba(13,17,23,0.5)", width: 46, textAlign: "right", flexShrink: 0 }}>
+                                  <span style={{ fontFamily: font.body, fontSize: 13, fontWeight: 600, color: "rgba(13,17,23,0.55)", width: 46, textAlign: "right", flexShrink: 0 }}>
                                     {typeof k.impressions === "number" ? k.impressions.toLocaleString() : k.impressions}
                                   </span>
                                 </div>
@@ -2778,79 +2789,95 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
                             })}
                           </div>
                         );
-                      })()}
-                    </div>
-                  )}
+                      })()
+                    ) : (
+                      <div style={{ padding: "12px 0 4px", textAlign: "center" }}>
+                        <div style={{ fontFamily: font.body, fontSize: 14, color: "rgba(13,17,23,0.5)", marginBottom: 4 }}>No search data yet</div>
+                        <div style={{ fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.4)", maxWidth: 320, margin: "0 auto" }}>Google needs a bit more traffic to your profile before it reports which terms are bringing people in. Check back in a week or two.</div>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Sentiment breakdown */}
-                  {googleData.sentiment && googleData.sentiment_based_on > 0 && (
-                    <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
-                      <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 2 }}>Sentiment Breakdown</div>
-                      <div style={{ fontFamily: font.body, fontSize: 10, color: "rgba(13,17,23,0.35)", marginBottom: 10 }}>Based on your last {googleData.sentiment_based_on} reviews</div>
-                      {(() => {
-                        const maxS = Math.max(...Object.values(googleData.sentiment), 1);
-                        return [5, 4, 3, 2, 1].map((star) => (
-                          <div key={star} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                            <span style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.5)", width: 10 }}>{star}</span>
-                            <span style={{ color: "#D8A83E", fontSize: 10 }}>★</span>
-                            <div style={{ flex: 1, height: 8, background: "#F4F7FB", borderRadius: 99, overflow: "hidden" }}>
-                              <div style={{ width: `${(googleData.sentiment[star] / maxS) * 100}%`, height: "100%", background: star >= 4 ? "#1A5FBF" : star === 3 ? "#B9C4D6" : "#C0392B", borderRadius: 99 }} />
+                  <div style={{ background: "#fff", borderRadius: 14, padding: 16, marginBottom: 12, border: "1px solid rgba(26,95,191,0.08)" }}>
+                    <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: "rgba(13,17,23,0.45)", marginBottom: 2 }}>Sentiment Breakdown</div>
+                    {googleData.sentiment && googleData.sentiment_based_on > 0 ? (
+                      <>
+                        <div style={{ fontFamily: font.body, fontSize: 12, color: "rgba(13,17,23,0.4)", marginBottom: 10 }}>Based on your last {googleData.sentiment_based_on} reviews</div>
+                        {(() => {
+                          const maxS = Math.max(...Object.values(googleData.sentiment), 1);
+                          return [5, 4, 3, 2, 1].map((star) => (
+                            <div key={star} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                              <span style={{ fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.55)", width: 10 }}>{star}</span>
+                              <span style={{ color: "#D8A83E", fontSize: 12 }}>★</span>
+                              <div style={{ flex: 1, height: 8, background: "#F4F7FB", borderRadius: 99, overflow: "hidden" }}>
+                                <div style={{ width: `${(googleData.sentiment[star] / maxS) * 100}%`, height: "100%", background: star >= 4 ? "#1A5FBF" : star === 3 ? "#B9C4D6" : "#C0392B", borderRadius: 99 }} />
+                              </div>
+                              <span style={{ fontFamily: font.mono, fontSize: 12, color: "rgba(13,17,23,0.45)", width: 20, textAlign: "right" }}>{googleData.sentiment[star]}</span>
                             </div>
-                            <span style={{ fontFamily: font.mono, fontSize: 10, color: "rgba(13,17,23,0.4)", width: 20, textAlign: "right" }}>{googleData.sentiment[star]}</span>
-                          </div>
-                        ));
-                      })()}
-                    </div>
-                  )}
+                          ));
+                        })()}
+                      </>
+                    ) : (
+                      <div style={{ padding: "8px 0 4px", textAlign: "center" }}>
+                        <div style={{ fontFamily: font.body, fontSize: 14, color: "rgba(13,17,23,0.5)" }}>Not enough reviews yet to show a breakdown</div>
+                      </div>
+                    )}
+                  </div>
 
                   {/* Recent reviews */}
-                  {googleData.reviews && googleData.reviews.length > 0 && (
-                    <div style={{ background: "#fff", borderRadius: 16, padding: 16, border: "1px solid rgba(26,95,191,0.08)" }}>
-                      <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", marginBottom: 10 }}>Recent Reviews</div>
+                  <div style={{ background: "#fff", borderRadius: 16, padding: 16, border: "1px solid rgba(26,95,191,0.08)" }}>
+                    <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(13,17,23,0.45)", marginBottom: 10 }}>Recent Reviews</div>
+                    {googleData.reviews && googleData.reviews.length > 0 ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                         {googleData.reviews.map((r, i) => (
                           <div key={i} style={{ paddingBottom: i < googleData.reviews.length - 1 ? 12 : 0, borderBottom: i < googleData.reviews.length - 1 ? "1px solid rgba(26,95,191,0.06)" : "none" }}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
-                              <span style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, color: "#0D1117" }}>{r.reviewer_name}</span>
-                              <span style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.4)" }}>{r.time_ago}</span>
+                              <span style={{ fontFamily: font.body, fontSize: 15, fontWeight: 700, color: "#0D1117" }}>{r.reviewer_name}</span>
+                              <span style={{ fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.45)" }}>{r.time_ago}</span>
                             </div>
-                            <div style={{ color: "#D8A83E", fontSize: 12, marginBottom: 4 }}>{"★".repeat(r.star_rating)}{"☆".repeat(5 - r.star_rating)}</div>
-                            {r.comment && <div style={{ fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.65)", lineHeight: 1.5, marginBottom: 6 }}>{r.comment}</div>}
+                            <div style={{ color: "#D8A83E", fontSize: 13, marginBottom: 4 }}>{"★".repeat(r.star_rating)}{"☆".repeat(5 - r.star_rating)}</div>
+                            {r.comment && <div style={{ fontFamily: font.body, fontSize: 15, color: "rgba(13,17,23,0.7)", lineHeight: 1.5, marginBottom: 6 }}>{r.comment}</div>}
                             {r.replied ? (
-                              <div style={{ fontFamily: font.body, fontSize: 11, color: "#1A8C4E", display: "flex", alignItems: "center", gap: 4 }}>
+                              <div style={{ fontFamily: font.body, fontSize: 13, color: "#1A8C4E", display: "flex", alignItems: "center", gap: 4 }}>
                                 ✓ Replied
                               </div>
                             ) : (
-                              <div style={{ fontFamily: font.body, fontSize: 11, color: "#B5791A", display: "flex", alignItems: "center", gap: 4 }}>
+                              <div style={{ fontFamily: font.body, fontSize: 13, color: "#B5791A", display: "flex", alignItems: "center", gap: 4 }}>
                                 ○ Not yet replied
                               </div>
                             )}
                           </div>
                         ))}
                       </div>
-                    </div>
-                  )}
+                    ) : (
+                      <div style={{ padding: "12px 0 4px", textAlign: "center" }}>
+                        <div style={{ fontFamily: font.body, fontSize: 14, color: "rgba(13,17,23,0.5)", marginBottom: 4 }}>No reviews on this profile yet</div>
+                        <div style={{ fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.4)" }}>Reviews will show up here as soon as customers start leaving them on Google.</div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
               {!googleConnected && (
                 <div style={{ background: "#fff", borderRadius: 16, padding: 16, marginBottom: 14, border: "1px solid rgba(26,95,191,0.1)", display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ width: 40, height: 40, borderRadius: 10, background: "#EEF3FA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>📊</div>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, color: "#0D1117", marginBottom: 2 }}>Connect Google for Live Analytics</div>
-                    <div style={{ fontFamily: font.body, fontSize: 11, color: "rgba(13,17,23,0.45)" }}>See your real star rating and reviews</div>
+                    <div style={{ fontFamily: font.body, fontSize: 15, fontWeight: 700, color: "#0D1117", marginBottom: 2 }}>Connect Google for Live Analytics</div>
+                    <div style={{ fontFamily: font.body, fontSize: 13, color: "rgba(13,17,23,0.5)" }}>See your real star rating and reviews</div>
                   </div>
-                  <button onClick={() => setTab("settings")} style={{ padding: "8px 14px", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", color: "#fff", border: "none", borderRadius: 10, fontFamily: font.body, fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Connect →</button>
+                  <button onClick={() => setTab("settings")} style={{ padding: "8px 14px", background: "linear-gradient(135deg, #1A5FBF, #0d3d8a)", color: "#fff", border: "none", borderRadius: 10, fontFamily: font.body, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>Connect →</button>
                 </div>
               )}
               {googleConnected && googleData && (
                 <>
                   <div style={{ height: 1, background: "rgba(26,95,191,0.08)", margin: "24px 0 0" }} />
-                  <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(13,17,23,0.35)", margin: "16px 0 10px" }}>
+                  <div style={{ fontFamily: font.body, fontSize: 13, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: "rgba(13,17,23,0.4)", margin: "16px 0 10px" }}>
                     ReviewSend Activity
                   </div>
                 </>
               )}
-              <AnalyticsTab log={log} businessName={settings.name} photos={[]} socialLinks={settings.social_links || {}} onNavigate={setTab} embedded={true} />
+              <AnalyticsTab log={log} businessName={settings.name} photos={[]} socialLinks={settings.social_links || {}} onNavigate={setTab} embedded={true} hideTitle={googleConnected && !!googleData} />
             </div>
           ) : (
             <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "0 32px" }}>
@@ -3424,7 +3451,7 @@ function BulkSendTab({ business, onComplete }) {
 }
 
 // ── ANALYTICS TAB ─────────────────────────────────────────────────────────────
-function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavigate = null, embedded = false }) {
+function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavigate = null, embedded = false, hideTitle = false }) {
   const now = new Date();
   const thisMonth = log.filter(m => new Date(m.sent_at).getMonth() === now.getMonth() && new Date(m.sent_at).getFullYear() === now.getFullYear());
   const lastMonth = log.filter(m => { const d = new Date(m.sent_at); const lm = new Date(now.getFullYear(), now.getMonth() - 1); return d.getMonth() === lm.getMonth() && d.getFullYear() === lm.getFullYear(); });
@@ -3449,25 +3476,27 @@ function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavi
   const maxCount = Math.max(...days.map(d => d.count), 1);
   const topCard = (value, label, sub, color) => (
     <div style={{ ...card, padding: "16px", textAlign: "center" }}>
-      <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontFamily: font.body, fontSize: 12, fontWeight: 600, color: C.text, marginTop: 6 }}>{label}</div>
-      {sub && <div style={{ fontFamily: font.body, fontSize: 10, color: C.textMuted, marginTop: 2 }}>{sub}</div>}
+      <div style={{ fontFamily: font.display, fontSize: 30, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontFamily: font.body, fontSize: 14, fontWeight: 600, color: C.text, marginTop: 6 }}>{label}</div>
+      {sub && <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 2 }}>{sub}</div>}
     </div>
   );
   const postCard = (value, label, abbr, color, link) => (
     <div onClick={() => link && window.open(link, "_blank")} style={{ ...card, padding: "16px", textAlign: "center", cursor: link ? "pointer" : "default", border: link ? `1px solid ${color}33` : `1px solid ${C.border}` }}>
-      <div style={{ width: 36, height: 36, borderRadius: 8, background: color + "18", border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px", fontFamily: font.mono, fontSize: 12, fontWeight: 700, color }}>{abbr}</div>
-      <div style={{ fontFamily: font.display, fontSize: 26, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, marginTop: 5 }}>{label}</div>
-      {link && <div style={{ fontFamily: font.body, fontSize: 10, color, marginTop: 4 }}>Tap to open →</div>}
+      <div style={{ width: 36, height: 36, borderRadius: 8, background: color + "18", border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px", fontFamily: font.mono, fontSize: 13, fontWeight: 700, color }}>{abbr}</div>
+      <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 5 }}>{label}</div>
+      {link && <div style={{ fontFamily: font.body, fontSize: 12, color, marginTop: 4 }}>Tap to open →</div>}
     </div>
   );
   return (
     <div style={embedded ? { padding: "4px 0 20px" } : { position: "absolute", inset: 0, overflowY: "auto", padding: "20px 20px 20px" }}>
-      <div style={{ textAlign: "center", marginBottom: 20 }}>
-        <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Analytics</div>
-        <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 4 }}>Your ReviewSend performance</div>
-      </div>
+      {!hideTitle && (
+        <div style={{ textAlign: "center", marginBottom: 20 }}>
+          <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 600, color: C.text }}>Analytics</div>
+          <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, marginTop: 4 }}>Your ReviewSend performance</div>
+        </div>
+      )}
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
         {topCard(total, "Total Sent", "All time", C.gold)}
         {topCard(thisMonth.length, "This Month", lastMonth.length > 0 ? `${growth >= 0 ? "+" : ""}${growth}% vs last` : "First month!", growth >= 0 ? C.green : "#e74c3c")}
@@ -3475,7 +3504,7 @@ function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavi
         {topCard(yelpCount, "Yelp Sent", `${total > 0 ? Math.round((yelpCount/total)*100) : 0}%`, "#C0392B")}
       </div>
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 10, fontWeight: 700 }}>Posts Published</div>
+        <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 2, color: C.textSub, textTransform: "uppercase", marginBottom: 10, fontWeight: 700 }}>Posts Published</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {postCard(gpCount, "Google Posts", "GP", "#4A90D9", socialLinks?.google || null)}
           {postCard(gcCount, "Google Photos", "GP2", "#1A8C4E", socialLinks?.google_campaign || null)}
@@ -3484,13 +3513,13 @@ function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavi
         </div>
       </div>
       <div style={{ ...card, padding: "20px 16px", marginBottom: 12 }}>
-        <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 3, color: C.textSub, textTransform: "uppercase", marginBottom: 16, fontWeight: 700 }}>Last 7 Days</div>
+        <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 2, color: C.textSub, textTransform: "uppercase", marginBottom: 16, fontWeight: 700 }}>Last 7 Days</div>
         <div style={{ display: "flex", gap: 6, alignItems: "flex-end", height: 80 }}>
           {days.map((d, i) => (
             <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <div style={{ fontFamily: font.mono, fontSize: 10, color: C.textMuted }}>{d.count > 0 ? d.count : ""}</div>
+              <div style={{ fontFamily: font.mono, fontSize: 12, color: C.textMuted }}>{d.count > 0 ? d.count : ""}</div>
               <div style={{ width: "100%", background: d.count > 0 ? `linear-gradient(180deg, #1A5FBF, #0d3d8a)` : C.border, borderRadius: "4px 4px 2px 2px", height: `${Math.max((d.count / maxCount) * 56, d.count > 0 ? 8 : 4)}px`, transition: "height 0.3s" }} />
-              <div style={{ fontFamily: font.body, fontSize: 10, color: C.textMuted }}>{d.label}</div>
+              <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{d.label}</div>
             </div>
           ))}
         </div>
