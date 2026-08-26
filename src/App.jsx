@@ -2208,6 +2208,39 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
     }
   };
 
+  // Google access tokens only last ~1 hour. Rather than silently failing (and
+  // making it look like the connection "broke"), this checks the stored
+  // expiry and transparently refreshes via the stored refresh_token when
+  // needed — the user should never have to manually reconnect just because
+  // time passed.
+  const getValidAccessToken = async () => {
+    const expiry = settings.google_token_expiry;
+    const bufferMs = 5 * 60 * 1000; // refresh 5 min early to avoid edge-of-expiry failures
+    if (settings.google_access_token && expiry && Date.now() < Number(expiry) - bufferMs) {
+      return settings.google_access_token; // still good
+    }
+    if (!settings.google_refresh_token) {
+      return settings.google_access_token; // nothing to refresh with — caller will surface whatever error comes back
+    }
+    try {
+      const res = await fetch(`${SERVER}/google/refresh-token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: settings.google_refresh_token }) });
+      const result = await res.json();
+      if (result.success) {
+        const newExpiry = Date.now() + result.expires_in * 1000;
+        await supabase.from("businesses").update({ google_access_token: result.access_token, google_token_expiry: newExpiry }).eq("id", data.id);
+        setSettings(s => ({ ...s, google_access_token: result.access_token, google_token_expiry: newExpiry }));
+        return result.access_token;
+      }
+      if (result.needs_reconnect) {
+        setGoogleError("Your Google connection needs to be reconnected — access was revoked or expired beyond renewal.");
+      }
+    } catch (err) {
+      // fall through to returning the stale token below — worst case the
+      // subsequent API call fails and surfaces its own error
+    }
+    return settings.google_access_token;
+  };
+
   // Step 2: pull rating/reviews for the specific chosen location and save
   // which one this business is linked to.
   const connectLocation = async (accessToken, loc) => {
@@ -2277,11 +2310,18 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
         setGoogleLoading(false);
       })();
     } else if (settings.google_access_token && settings.google_location_id) {
-      // Already connected and a location was previously chosen — go straight there
-      connectLocation(settings.google_access_token, { account_id: settings.google_account_id, location_id: settings.google_location_id });
+      // Already connected and a location was previously chosen — refresh the
+      // token if it's stale, then go straight there
+      (async () => {
+        const freshToken = await getValidAccessToken();
+        connectLocation(freshToken, { account_id: settings.google_account_id, location_id: settings.google_location_id });
+      })();
     } else if (settings.google_access_token) {
-      // Connected but no location saved yet (e.g. an older connection) — show picker
-      fetchLocations(settings.google_access_token);
+      // Connected but no location saved yet (e.g. an older connection) — refresh if needed, then show picker
+      (async () => {
+        const freshToken = await getValidAccessToken();
+        fetchLocations(freshToken);
+      })();
     }
   }, []);
 
