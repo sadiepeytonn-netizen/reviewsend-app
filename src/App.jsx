@@ -3481,14 +3481,6 @@ function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavi
       {sub && <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 2 }}>{sub}</div>}
     </div>
   );
-  const postCard = (value, label, abbr, color, link) => (
-    <div onClick={() => link && window.open(link, "_blank")} style={{ ...card, padding: "16px", textAlign: "center", cursor: link ? "pointer" : "default", border: link ? `1px solid ${color}33` : `1px solid ${C.border}` }}>
-      <div style={{ width: 36, height: 36, borderRadius: 8, background: color + "18", border: `1px solid ${color}44`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px", fontFamily: font.mono, fontSize: 13, fontWeight: 700, color }}>{abbr}</div>
-      <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
-      <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 5 }}>{label}</div>
-      {link && <div style={{ fontFamily: font.body, fontSize: 12, color, marginTop: 4 }}>Tap to open →</div>}
-    </div>
-  );
   return (
     <div style={embedded ? { padding: "4px 0 20px" } : { position: "absolute", inset: 0, overflowY: "auto", padding: "20px 20px 20px" }}>
       {!hideTitle && (
@@ -3504,12 +3496,23 @@ function AnalyticsTab({ log, businessName, photos = [], socialLinks = {}, onNavi
         {topCard(yelpCount, "Yelp Sent", `${total > 0 ? Math.round((yelpCount/total)*100) : 0}%`, "#C0392B")}
       </div>
       <div style={{ marginBottom: 16 }}>
-        <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 2, color: C.textSub, textTransform: "uppercase", marginBottom: 10, fontWeight: 700 }}>Posts Published</div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {postCard(gpCount, "Google Posts", "GP", "#4A90D9", socialLinks?.google || null)}
-          {postCard(gcCount, "Google Photos", "GP2", "#1A8C4E", socialLinks?.google_campaign || null)}
-          {postCard(igCount, "Instagram", "IG", "#E1306C", socialLinks?.instagram || null)}
-          {postCard(fbCount, "Facebook", "FB", "#1877F2", socialLinks?.facebook || null)}
+        <div style={{ ...card, padding: "16px 20px" }}>
+          <div style={{ fontFamily: font.body, fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 2 }}>Posts published on your behalf</div>
+          <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginBottom: 16 }}>Photos and updates ReviewSend has posted to each platform</div>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12 }}>
+            {[
+              { value: gpCount, label: "Google Posts", abbr: "GP", color: "#4A90D9", link: socialLinks?.google || null },
+              { value: gcCount, label: "Google Photos", abbr: "GP2", color: "#1A8C4E", link: socialLinks?.google_campaign || null },
+              { value: igCount, label: "Instagram", abbr: "IG", color: "#E1306C", link: socialLinks?.instagram || null },
+              { value: fbCount, label: "Facebook", abbr: "FB", color: "#1877F2", link: socialLinks?.facebook || null },
+            ].map((p) => (
+              <div key={p.label} onClick={() => p.link && window.open(p.link, "_blank")} style={{ textAlign: "center", cursor: p.link ? "pointer" : "default" }}>
+                <div style={{ width: 32, height: 32, borderRadius: 8, background: p.color + "18", border: `1px solid ${p.color}44`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 8px", fontFamily: font.mono, fontSize: 11, fontWeight: 700, color: p.color }}>{p.abbr}</div>
+                <div style={{ fontFamily: font.display, fontSize: 18, fontWeight: 700, color: C.text, lineHeight: 1 }}>{p.value}</div>
+                <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 4 }}>{p.label}</div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
       <div style={{ ...card, padding: "20px 16px", marginBottom: 12 }}>
