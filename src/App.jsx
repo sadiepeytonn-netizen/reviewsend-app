@@ -1408,51 +1408,51 @@ function MarketingDashboard({ data, onSignOut }) {
                   <div style={{ ...card, padding: 60, textAlign: "center", color: C.textMuted, fontFamily: font.body, fontSize: 14 }}>Select a client from the list to view their workspace.</div>
                 ) : (
                   <div>
-                    <button onClick={() => setSelectedBusiness(null)} style={{ ...ghostBtnStyle, fontSize: 13, padding: "7px 14px", marginBottom: 16, display: "inline-flex", alignItems: "center", gap: 6 }}>← All clients</button>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
-                      <div><div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>{selectedBusiness.name}</div><div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{selectedBusiness.email}</div></div>
+                    <button onClick={() => setSelectedBusiness(null)} style={{ ...ghostBtnStyle, fontSize: 14, padding: "8px 16px", marginBottom: 18, display: "inline-flex", alignItems: "center", gap: 6 }}>← All clients</button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
+                      <div style={{ width: 50, height: 50, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontSize: 20, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
+                      <div><div style={{ fontFamily: font.display, fontSize: 23, fontWeight: 600 }}>{selectedBusiness.name}</div><div style={{ fontFamily: font.mono, fontSize: 15, color: C.textMuted }}>{selectedBusiness.email}</div></div>
                     </div>
                     {(() => {
                       const next = nextApptFor(selectedBusiness.id);
-                      return <div style={{ fontFamily: font.body, fontSize: 13, color: C.gold, marginBottom: 12 }}>{next ? `Next: ${new Date(next.starts_at).toLocaleDateString([], { month: "short", day: "numeric" })}, ${fmtTime(new Date(next.starts_at))} — ${next.title}` : "No upcoming appointment"}</div>;
+                      return <div style={{ fontFamily: font.body, fontSize: 15, color: C.gold, marginBottom: 14 }}>{next ? `Next: ${new Date(next.starts_at).toLocaleDateString([], { month: "short", day: "numeric" })}, ${fmtTime(new Date(next.starts_at))} — ${next.title}` : "No upcoming appointment"}</div>;
                     })()}
 
                     <div style={{ marginBottom: 20 }}>
                       <Label>Assigned Account Manager</Label>
-                      <select value={selectedBusiness.account_manager_id || ""} onChange={e => assignToManager(selectedBusiness.id, e.target.value)} style={inputStyle}>
+                      <select value={selectedBusiness.account_manager_id || ""} onChange={e => assignToManager(selectedBusiness.id, e.target.value)} style={{ ...inputStyle, fontSize: 16 }}>
                         <option value="">Unassigned</option>
                         {accountManagers.map(am => <option key={am.id} value={am.id}>{am.name}</option>)}
                       </select>
                     </div>
 
                     {/* Messages */}
-                    <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                        <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Messages</div>
-                        {unreadChatByBiz[selectedBusiness.id] > 0 && <span style={{ background: "#E85D04", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>{unreadChatByBiz[selectedBusiness.id]} new</span>}
+                    <div style={{ ...card, padding: 22, marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                        <div style={{ fontFamily: font.display, fontSize: 19, fontWeight: 600 }}>Messages</div>
+                        {unreadChatByBiz[selectedBusiness.id] > 0 && <span style={{ background: "#E85D04", color: "#fff", fontSize: 13, fontWeight: 700, padding: "3px 10px", borderRadius: 99 }}>{unreadChatByBiz[selectedBusiness.id]} new</span>}
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto", marginBottom: 12 }}>
-                        {chatMessages.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>No messages yet.</div>}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 220, overflowY: "auto", marginBottom: 14 }}>
+                        {chatMessages.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted }}>No messages yet.</div>}
                         {chatMessages.map((m, i) => (
                           <div key={i} style={{ display: "flex", justifyContent: m.sender_role === "manager" ? "flex-end" : "flex-start" }}>
-                            <div style={{ maxWidth: "75%", padding: "8px 12px", borderRadius: 14, background: m.sender_role === "manager" ? C.gold : "#F0F4FA", color: m.sender_role === "manager" ? "#fff" : C.text, fontFamily: font.body, fontSize: 13 }}>{m.message}</div>
+                            <div style={{ maxWidth: "75%", padding: "10px 14px", borderRadius: 14, background: m.sender_role === "manager" ? C.gold : "#F0F4FA", color: m.sender_role === "manager" ? "#fff" : C.text, fontFamily: font.body, fontSize: 15 }}>{m.message}</div>
                           </div>
                         ))}
                       </div>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Message this client…" style={{ ...inputStyle, flex: 1 }} />
-                        <button onClick={sendChat} style={{ ...btnStyle, fontSize: 13, padding: "10px 18px" }}>Send</button>
+                        <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Message this client…" style={{ ...inputStyle, fontSize: 16, flex: 1 }} />
+                        <button onClick={sendChat} style={{ ...btnStyle, fontSize: 15, padding: "11px 20px" }}>Send</button>
                       </div>
                     </div>
 
                     <ClientNotesSection businessId={selectedBusiness.id} authorName={data.name} />
 
                     {/* Appointments — filtered to this client */}
-                    <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                        <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Appointments — this client only</div>
-                        <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>Click a day to schedule</span>
+                    <div style={{ ...card, padding: 22, marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                        <div style={{ fontFamily: font.display, fontSize: 19, fontWeight: 600 }}>Appointments — this client only</div>
+                        <span style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted }}>Click a day to schedule</span>
                       </div>
                       <CalendarMonthGrid
                         monthDate={monthDate}
@@ -1597,15 +1597,15 @@ function CalendarMonthGrid({ monthDate, appointments, businessNameById, managerN
             style={{
               border: `1px solid ${isToday ? C.gold : C.border}`,
               background: isToday ? "#EEF3FA" : "#fff",
-              borderRadius: 8, minHeight: compact ? 30 : 46, padding: 3,
-              cursor: "pointer", fontFamily: font.mono, fontSize: 10, color: C.textMuted,
+              borderRadius: 8, minHeight: compact ? 36 : 52, padding: 4,
+              cursor: "pointer", fontFamily: font.mono, fontSize: 12, color: C.textMuted,
             }}>
             <div style={{ fontWeight: isToday ? 700 : 400 }}>{day}</div>
             {dayAppts.map(a => (
               <div key={a.id}
                 onClick={(e) => { e.stopPropagation(); onApptClick(a); }}
                 title={businessNameById[a.business_id] + (managerNameById && managerNameById[a.account_manager_id] ? " · " + managerNameById[a.account_manager_id] : "") + " — " + a.title}
-                style={{ marginTop: 2, fontSize: 9, background: "#ede9fe", color: "#6d28d9", borderRadius: 4, padding: "1px 3px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                style={{ marginTop: 2, fontSize: 11, background: "#ede9fe", color: "#6d28d9", borderRadius: 4, padding: "1px 4px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {fmtTime(new Date(a.starts_at))} {businessNameById[a.business_id]}{managerNameById && managerNameById[a.account_manager_id] ? " (" + managerNameById[a.account_manager_id] + ")" : ""}
               </div>
             ))}
@@ -1713,27 +1713,27 @@ function ClientNotesSection({ businessId, authorName }) {
   };
 
   return (
-    <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-      <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600, color: C.text, marginBottom: 12 }}>Notes</div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
-        {notes.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>No notes yet.</div>}
+    <div style={{ ...card, padding: 22, marginBottom: 16 }}>
+      <div style={{ fontFamily: font.display, fontSize: 19, fontWeight: 600, color: C.text, marginBottom: 14 }}>Notes</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 14 }}>
+        {notes.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted }}>No notes yet.</div>}
         {notes.map(n => (
-          <div key={n.id} style={{ borderLeft: `2px solid ${C.gold}`, paddingLeft: 10 }}>
-            <div style={{ fontFamily: font.mono, fontSize: 11, color: C.textMuted }}>{n.author_name} · {new Date(n.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
-            <div style={{ fontFamily: font.body, fontSize: 13, color: C.text }}>{n.note}</div>
+          <div key={n.id} style={{ borderLeft: `2px solid ${C.gold}`, paddingLeft: 12 }}>
+            <div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{n.author_name} · {new Date(n.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+            <div style={{ fontFamily: font.body, fontSize: 16, color: C.text, lineHeight: 1.5 }}>{n.note}</div>
           </div>
         ))}
       </div>
       {adding ? (
         <div>
-          <textarea rows={2} value={text} onChange={e => setText(e.target.value)} placeholder="Write a note" style={{ ...inputStyle, marginBottom: 8 }} />
+          <textarea rows={2} value={text} onChange={e => setText(e.target.value)} placeholder="Write a note" style={{ ...inputStyle, fontSize: 16, marginBottom: 8 }} />
           <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={saveNote} disabled={saving} style={{ ...btnStyle, fontSize: 13, padding: "8px 14px" }}>{saving ? "Saving…" : "Save"}</button>
-            <button onClick={() => { setAdding(false); setText(""); }} style={{ ...ghostBtnStyle, fontSize: 13, padding: "8px 14px" }}>Cancel</button>
+            <button onClick={saveNote} disabled={saving} style={{ ...btnStyle, fontSize: 15, padding: "9px 16px" }}>{saving ? "Saving…" : "Save"}</button>
+            <button onClick={() => { setAdding(false); setText(""); }} style={{ ...ghostBtnStyle, fontSize: 15, padding: "9px 16px" }}>Cancel</button>
           </div>
         </div>
       ) : (
-        <button onClick={() => setAdding(true)} style={{ ...ghostBtnStyle, fontSize: 13, padding: "8px 14px" }}>+ Add note</button>
+        <button onClick={() => setAdding(true)} style={{ ...ghostBtnStyle, fontSize: 15, padding: "9px 16px" }}>+ Add note</button>
       )}
     </div>
   );
@@ -2358,43 +2358,43 @@ function AccountManagerDashboard({ data, onSignOut }) {
                   <div style={{ ...card, padding: 60, textAlign: "center", color: C.textMuted, fontFamily: font.body, fontSize: 14 }}>Select a client from the list to view their workspace.</div>
                 ) : (
                   <div>
-                    <button onClick={() => setSelectedBusiness(null)} style={{ ...ghostBtnStyle, fontSize: 13, padding: "7px 14px", marginBottom: 16, display: "inline-flex", alignItems: "center", gap: 6 }}>← All clients</button>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
-                      <div><div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>{selectedBusiness.name}</div><div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{selectedBusiness.email}</div></div>
+                    <button onClick={() => setSelectedBusiness(null)} style={{ ...ghostBtnStyle, fontSize: 14, padding: "8px 16px", marginBottom: 18, display: "inline-flex", alignItems: "center", gap: 6 }}>← All clients</button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 6 }}>
+                      <div style={{ width: 50, height: 50, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontSize: 20, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
+                      <div><div style={{ fontFamily: font.display, fontSize: 23, fontWeight: 600 }}>{selectedBusiness.name}</div><div style={{ fontFamily: font.mono, fontSize: 15, color: C.textMuted }}>{selectedBusiness.email}</div></div>
                     </div>
                     {(() => {
                       const next = nextApptFor(selectedBusiness.id);
-                      return <div style={{ fontFamily: font.body, fontSize: 13, color: C.gold, marginBottom: 20 }}>{next ? `Next: ${new Date(next.starts_at).toLocaleDateString([], { month: "short", day: "numeric" })}, ${fmtTime(new Date(next.starts_at))} — ${next.title}` : "No upcoming appointment"}</div>;
+                      return <div style={{ fontFamily: font.body, fontSize: 15, color: C.gold, marginBottom: 20 }}>{next ? `Next: ${new Date(next.starts_at).toLocaleDateString([], { month: "short", day: "numeric" })}, ${fmtTime(new Date(next.starts_at))} — ${next.title}` : "No upcoming appointment"}</div>;
                     })()}
 
                     {/* Messages */}
-                    <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                        <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Messages</div>
-                        {unreadChatByBiz[selectedBusiness.id] > 0 && <span style={{ background: "#E85D04", color: "#fff", fontSize: 11, fontWeight: 700, padding: "2px 8px", borderRadius: 99 }}>{unreadChatByBiz[selectedBusiness.id]} new</span>}
+                    <div style={{ ...card, padding: 22, marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                        <div style={{ fontFamily: font.display, fontSize: 19, fontWeight: 600 }}>Messages</div>
+                        {unreadChatByBiz[selectedBusiness.id] > 0 && <span style={{ background: "#E85D04", color: "#fff", fontSize: 13, fontWeight: 700, padding: "3px 10px", borderRadius: 99 }}>{unreadChatByBiz[selectedBusiness.id]} new</span>}
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 200, overflowY: "auto", marginBottom: 12 }}>
-                        {chatMessages.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>No messages yet.</div>}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 220, overflowY: "auto", marginBottom: 14 }}>
+                        {chatMessages.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted }}>No messages yet.</div>}
                         {chatMessages.map((m, i) => (
                           <div key={i} style={{ display: "flex", justifyContent: m.sender_role === "manager" ? "flex-end" : "flex-start" }}>
-                            <div style={{ maxWidth: "75%", padding: "8px 12px", borderRadius: 14, background: m.sender_role === "manager" ? C.gold : "#F0F4FA", color: m.sender_role === "manager" ? "#fff" : C.text, fontFamily: font.body, fontSize: 13 }}>{m.message}</div>
+                            <div style={{ maxWidth: "75%", padding: "10px 14px", borderRadius: 14, background: m.sender_role === "manager" ? C.gold : "#F0F4FA", color: m.sender_role === "manager" ? "#fff" : C.text, fontFamily: font.body, fontSize: 15 }}>{m.message}</div>
                           </div>
                         ))}
                       </div>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Message this client…" style={{ ...inputStyle, flex: 1 }} />
-                        <button onClick={sendChat} style={{ ...btnStyle, fontSize: 13, padding: "10px 18px" }}>Send</button>
+                        <input value={chatInput} onChange={e => setChatInput(e.target.value)} onKeyDown={e => e.key === "Enter" && sendChat()} placeholder="Message this client…" style={{ ...inputStyle, fontSize: 16, flex: 1 }} />
+                        <button onClick={sendChat} style={{ ...btnStyle, fontSize: 15, padding: "11px 20px" }}>Send</button>
                       </div>
                     </div>
 
                     <ClientNotesSection businessId={selectedBusiness.id} authorName={data.name} />
 
                     {/* Appointments — filtered to this client */}
-                    <div style={{ ...card, padding: 20, marginBottom: 16 }}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-                        <div style={{ fontFamily: font.display, fontSize: 16, fontWeight: 600 }}>Appointments — this client only</div>
-                        <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>Click a day to schedule</span>
+                    <div style={{ ...card, padding: 22, marginBottom: 16 }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                        <div style={{ fontFamily: font.display, fontSize: 19, fontWeight: 600 }}>Appointments — this client only</div>
+                        <span style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted }}>Click a day to schedule</span>
                       </div>
                       <CalendarMonthGrid
                         monthDate={monthDate}
