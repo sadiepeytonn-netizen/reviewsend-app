@@ -869,6 +869,10 @@ function MarketingDashboard({ data, onSignOut }) {
   });
   const [savingTask, setSavingTask] = useState(false);
   const restoredSelectionRef = useRef(false);
+  // Captured once, synchronously, at first render — before the "persist
+  // selectedBusiness" effect below gets a chance to run with its still-null
+  // initial value and wipe this same sessionStorage key out from under us.
+  const [pendingRestoreBizId] = useState(() => sessionStorage.getItem(RS_NS + "selectedBusinessId"));
 
   // Connecting a client's Google Business Profile using the marketing company's
   // own login (works as long as they've been added as a Manager on that client's
@@ -895,13 +899,15 @@ function MarketingDashboard({ data, onSignOut }) {
   useEffect(() => { sessionStorage.setItem(RS_NS + "newTaskDraft", JSON.stringify(newTask)); }, [newTask]);
 
   // One-time restore of the selected client, once the business list has
-  // actually loaded (can't select a business we haven't fetched yet).
+  // actually loaded (can't select a business we haven't fetched yet). Uses
+  // pendingRestoreBizId (captured at mount) rather than reading sessionStorage
+  // again here, since the "persist selectedBusiness" effect above already ran
+  // once with selectedBusiness still null and would have cleared this key.
   useEffect(() => {
     if (restoredSelectionRef.current || businesses.length === 0) return;
     restoredSelectionRef.current = true;
-    const savedId = sessionStorage.getItem(RS_NS + "selectedBusinessId");
-    if (savedId) {
-      const match = businesses.find(b => b.id === savedId);
+    if (pendingRestoreBizId) {
+      const match = businesses.find(b => b.id === pendingRestoreBizId);
       if (match) selectBusiness(match);
     }
   }, [businesses]);
@@ -2065,6 +2071,10 @@ function AccountManagerDashboard({ data, onSignOut }) {
   });
   const [savingTask, setSavingTask] = useState(false);
   const restoredSelectionRef = useRef(false);
+  // Captured once, synchronously, at first render — before the "persist
+  // selectedBusiness" effect below gets a chance to run with its still-null
+  // initial value and wipe this same sessionStorage key out from under us.
+  const [pendingRestoreBizId] = useState(() => sessionStorage.getItem(RS_NS + "selectedBusinessId"));
 
   // Connecting a client's Google Business Profile using the account manager's
   // own login (works as long as they've been added as a Manager on that client's
@@ -2091,13 +2101,15 @@ function AccountManagerDashboard({ data, onSignOut }) {
   useEffect(() => { sessionStorage.setItem(RS_NS + "newTaskDraft", JSON.stringify(newTask)); }, [newTask]);
 
   // One-time restore of the selected client, once the business list has
-  // actually loaded (can't select a business we haven't fetched yet).
+  // actually loaded (can't select a business we haven't fetched yet). Uses
+  // pendingRestoreBizId (captured at mount) rather than reading sessionStorage
+  // again here, since the "persist selectedBusiness" effect above already ran
+  // once with selectedBusiness still null and would have cleared this key.
   useEffect(() => {
     if (restoredSelectionRef.current || businesses.length === 0) return;
     restoredSelectionRef.current = true;
-    const savedId = sessionStorage.getItem(RS_NS + "selectedBusinessId");
-    if (savedId) {
-      const match = businesses.find(b => b.id === savedId);
+    if (pendingRestoreBizId) {
+      const match = businesses.find(b => b.id === pendingRestoreBizId);
       if (match) selectBusiness(match);
     }
   }, [businesses]);
