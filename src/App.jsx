@@ -816,7 +816,12 @@ function SuperAdminDashboard({ onSignOut }) {
 // Marketing-only additions on top of that: a Managers tab, adding new clients,
 // assigning a client to an account manager, and the Danger Zone delete.
 function MarketingDashboard({ data, onSignOut }) {
-  const [view, setView] = useState("overview"); // overview | calendar | clients | photos | managers
+  // Persisted to sessionStorage so a browser-triggered tab reload (e.g. Chrome's
+  // memory saver discarding an inactive tab) doesn't wipe out where you were or
+  // what you were mid-typing. sessionStorage survives a tab discard/reload —
+  // React state does not, since the page reruns from scratch.
+  const RS_NS = "rs_mkt_";
+  const [view, setView] = useState(() => sessionStorage.getItem(RS_NS + "view") || "overview"); // overview | calendar | clients | photos | managers
   const [businesses, setBusinesses] = useState([]);
   const [accountManagers, setAccountManagers] = useState([]);
   const [appointments, setAppointments] = useState([]);
@@ -844,7 +849,10 @@ function MarketingDashboard({ data, onSignOut }) {
   const [bizMessages, setBizMessages] = useState([]);
   const [bizPhotos, setBizPhotos] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState("");
+  const [chatInput, setChatInput] = useState(() => {
+    const savedBizId = sessionStorage.getItem(RS_NS + "selectedBusinessId");
+    return savedBizId ? (sessionStorage.getItem(RS_NS + "chatDraft_" + savedBizId) || "") : "";
+  });
   const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
   const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
 
@@ -854,9 +862,13 @@ function MarketingDashboard({ data, onSignOut }) {
   // Tasks — assignable to any account manager, optionally linked to a client
   const [tasks, setTasks] = useState([]);
   const [taskFilter, setTaskFilter] = useState("open"); // open | completed | all
-  const [showAddTask, setShowAddTask] = useState(false);
-  const [newTask, setNewTask] = useState({ title: "", notes: "", due_date: "", account_manager_id: "", business_id: "" });
+  const [showAddTask, setShowAddTask] = useState(() => sessionStorage.getItem(RS_NS + "showAddTask") === "true");
+  const [newTask, setNewTask] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(RS_NS + "newTaskDraft")) || { title: "", notes: "", due_date: "", account_manager_id: "", business_id: "" }; }
+    catch { return { title: "", notes: "", due_date: "", account_manager_id: "", business_id: "" }; }
+  });
   const [savingTask, setSavingTask] = useState(false);
+  const restoredSelectionRef = useRef(false);
 
   // Connecting a client's Google Business Profile using the marketing company's
   // own login (works as long as they've been added as a Manager on that client's
@@ -867,6 +879,32 @@ function MarketingDashboard({ data, onSignOut }) {
   const [showGoogleLocationPicker, setShowGoogleLocationPicker] = useState(false);
 
   useEffect(() => { loadAll(); loadTasks(); }, []);
+
+  // Persist which tab and which client we're on, so a browser-triggered reload
+  // (tab discard/memory saver) restores exactly where you were instead of
+  // dropping back to Overview.
+  useEffect(() => { sessionStorage.setItem(RS_NS + "view", view); }, [view]);
+  useEffect(() => {
+    if (selectedBusiness) sessionStorage.setItem(RS_NS + "selectedBusinessId", selectedBusiness.id);
+    else sessionStorage.removeItem(RS_NS + "selectedBusinessId");
+  }, [selectedBusiness]);
+  useEffect(() => {
+    if (selectedBusiness) sessionStorage.setItem(RS_NS + "chatDraft_" + selectedBusiness.id, chatInput);
+  }, [chatInput, selectedBusiness]);
+  useEffect(() => { sessionStorage.setItem(RS_NS + "showAddTask", String(showAddTask)); }, [showAddTask]);
+  useEffect(() => { sessionStorage.setItem(RS_NS + "newTaskDraft", JSON.stringify(newTask)); }, [newTask]);
+
+  // One-time restore of the selected client, once the business list has
+  // actually loaded (can't select a business we haven't fetched yet).
+  useEffect(() => {
+    if (restoredSelectionRef.current || businesses.length === 0) return;
+    restoredSelectionRef.current = true;
+    const savedId = sessionStorage.getItem(RS_NS + "selectedBusinessId");
+    if (savedId) {
+      const match = businesses.find(b => b.id === savedId);
+      if (match) selectBusiness(match);
+    }
+  }, [businesses]);
 
   // Handle returning from Google's OAuth screen for a specific client business.
   // The App-level effect (top of file) stashes ?code and ?state into
@@ -1032,6 +1070,7 @@ function MarketingDashboard({ data, onSignOut }) {
   };
 
   const selectBusiness = async (biz) => {
+    setChatInput(sessionStorage.getItem(RS_NS + "chatDraft_" + biz.id) || "");
     setSelectedBusiness(biz);
     const { data: msgs } = await supabase.from("messages").select("*").eq("business_id", biz.id).order("sent_at", { ascending: false });
     setBizMessages(msgs || []);
@@ -1693,11 +1732,23 @@ function ScheduleModal({ businesses, defaultBusinessId, defaultDate, editingAppt
 // ── CLIENT NOTES SECTION (private, append-only log) ──────────────────────────
 function ClientNotesSection({ businessId, authorName }) {
   const [notes, setNotes] = useState([]);
-  const [adding, setAdding] = useState(false);
-  const [text, setText] = useState("");
+  const [adding, setAdding] = useState(() => sessionStorage.getItem("rs_noteAdding_" + businessId) === "true");
+  const [text, setText] = useState(() => sessionStorage.getItem("rs_noteDraft_" + businessId) || "");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => { loadNotes(); }, [businessId]);
+
+  // This component isn't remounted when switching clients (no key prop at its
+  // call site), so without this it would keep whatever was typed for the
+  // PREVIOUS client. Restore this business's own draft whenever businessId
+  // changes, and persist as the user types so a browser-triggered reload
+  // doesn't wipe out an in-progress note either.
+  useEffect(() => {
+    setText(sessionStorage.getItem("rs_noteDraft_" + businessId) || "");
+    setAdding(sessionStorage.getItem("rs_noteAdding_" + businessId) === "true");
+  }, [businessId]);
+  useEffect(() => { sessionStorage.setItem("rs_noteDraft_" + businessId, text); }, [text, businessId]);
+  useEffect(() => { sessionStorage.setItem("rs_noteAdding_" + businessId, String(adding)); }, [adding, businessId]);
 
   const loadNotes = async () => {
     const { data } = await supabase.from("client_notes").select("*").eq("business_id", businessId).order("created_at", { ascending: false });
@@ -1710,6 +1761,7 @@ function ClientNotesSection({ businessId, authorName }) {
     const { data } = await supabase.from("client_notes").insert([{ business_id: businessId, author_name: authorName, note: text.trim() }]).select().single();
     if (data) setNotes(prev => [data, ...prev]);
     setText(""); setAdding(false); setSaving(false);
+    sessionStorage.removeItem("rs_noteDraft_" + businessId);
   };
 
   return (
@@ -1979,7 +2031,8 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
 
 // ── MAIN ACCOUNT MANAGER DASHBOARD ────────────────────────────────────────────
 function AccountManagerDashboard({ data, onSignOut }) {
-  const [view, setView] = useState("calendar"); // calendar | clients | photos | tasks
+  const RS_NS = "rs_am_";
+  const [view, setView] = useState(() => sessionStorage.getItem(RS_NS + "view") || "calendar"); // calendar | clients | photos | tasks
   const [businesses, setBusinesses] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [selectedBusiness, setSelectedBusiness] = useState(null);
@@ -1994,7 +2047,10 @@ function AccountManagerDashboard({ data, onSignOut }) {
   const [bizMessages, setBizMessages] = useState([]);
   const [bizPhotos, setBizPhotos] = useState([]);
   const [chatMessages, setChatMessages] = useState([]);
-  const [chatInput, setChatInput] = useState("");
+  const [chatInput, setChatInput] = useState(() => {
+    const savedBizId = sessionStorage.getItem(RS_NS + "selectedBusinessId");
+    return savedBizId ? (sessionStorage.getItem(RS_NS + "chatDraft_" + savedBizId) || "") : "";
+  });
   const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
   const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
 
@@ -2002,9 +2058,13 @@ function AccountManagerDashboard({ data, onSignOut }) {
   // they've chosen to pick up)
   const [tasks, setTasks] = useState([]);
   const [taskFilter, setTaskFilter] = useState("open"); // open | completed | all
-  const [showAddTask, setShowAddTask] = useState(false);
-  const [newTask, setNewTask] = useState({ title: "", notes: "", due_date: "", business_id: "" });
+  const [showAddTask, setShowAddTask] = useState(() => sessionStorage.getItem(RS_NS + "showAddTask") === "true");
+  const [newTask, setNewTask] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(RS_NS + "newTaskDraft")) || { title: "", notes: "", due_date: "", business_id: "" }; }
+    catch { return { title: "", notes: "", due_date: "", business_id: "" }; }
+  });
   const [savingTask, setSavingTask] = useState(false);
+  const restoredSelectionRef = useRef(false);
 
   // Connecting a client's Google Business Profile using the account manager's
   // own login (works as long as they've been added as a Manager on that client's
@@ -2015,6 +2075,32 @@ function AccountManagerDashboard({ data, onSignOut }) {
   const [showGoogleLocationPicker, setShowGoogleLocationPicker] = useState(false);
 
   useEffect(() => { loadAll(); loadTasks(); }, []);
+
+  // Persist which tab and which client we're on, so a browser-triggered reload
+  // (tab discard/memory saver) restores exactly where you were instead of
+  // dropping back to Calendar.
+  useEffect(() => { sessionStorage.setItem(RS_NS + "view", view); }, [view]);
+  useEffect(() => {
+    if (selectedBusiness) sessionStorage.setItem(RS_NS + "selectedBusinessId", selectedBusiness.id);
+    else sessionStorage.removeItem(RS_NS + "selectedBusinessId");
+  }, [selectedBusiness]);
+  useEffect(() => {
+    if (selectedBusiness) sessionStorage.setItem(RS_NS + "chatDraft_" + selectedBusiness.id, chatInput);
+  }, [chatInput, selectedBusiness]);
+  useEffect(() => { sessionStorage.setItem(RS_NS + "showAddTask", String(showAddTask)); }, [showAddTask]);
+  useEffect(() => { sessionStorage.setItem(RS_NS + "newTaskDraft", JSON.stringify(newTask)); }, [newTask]);
+
+  // One-time restore of the selected client, once the business list has
+  // actually loaded (can't select a business we haven't fetched yet).
+  useEffect(() => {
+    if (restoredSelectionRef.current || businesses.length === 0) return;
+    restoredSelectionRef.current = true;
+    const savedId = sessionStorage.getItem(RS_NS + "selectedBusinessId");
+    if (savedId) {
+      const match = businesses.find(b => b.id === savedId);
+      if (match) selectBusiness(match);
+    }
+  }, [businesses]);
 
   // Handle returning from Google's OAuth screen for a specific client business.
   useEffect(() => {
@@ -2157,6 +2243,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
   };
 
   const selectBusiness = async (biz) => {
+    setChatInput(sessionStorage.getItem(RS_NS + "chatDraft_" + biz.id) || "");
     setSelectedBusiness(biz);
     const { data: msgs } = await supabase.from("messages").select("*").eq("business_id", biz.id).order("sent_at", { ascending: false });
     setBizMessages(msgs || []);
