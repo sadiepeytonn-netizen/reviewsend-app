@@ -302,6 +302,15 @@ export default function App() {
         setLoading(false);
         return;
       }
+      // Supabase fires TOKEN_REFRESHED (and sometimes INITIAL_SESSION/USER_UPDATED)
+      // automatically whenever the tab regains focus — not just on a real login.
+      // Reacting to those the same way we react to a fresh sign-in was resetting
+      // `loading` to true, which unmounts the whole dashboard and throws away
+      // any in-progress work (open forms, typed notes, selected client, etc.).
+      // Only a genuine identity change should trigger a reload.
+      if (_event === "TOKEN_REFRESHED" || _event === "USER_UPDATED" || _event === "INITIAL_SESSION") {
+        return;
+      }
       if (session && !setPasswordMode) loadUserRole(session.user.email);
       else if (!session) { setLoading(false); setUserRole(null); setBusinessData(null); setMarketingData(null); setAccountManagerData(null); }
     });
@@ -807,7 +816,7 @@ function SuperAdminDashboard({ onSignOut }) {
 // Marketing-only additions on top of that: a Managers tab, adding new clients,
 // assigning a client to an account manager, and the Danger Zone delete.
 function MarketingDashboard({ data, onSignOut }) {
-  const [view, setView] = useState("calendar"); // calendar | clients | photos | managers
+  const [view, setView] = useState("overview"); // overview | calendar | clients | photos | managers
   const [businesses, setBusinesses] = useState([]);
   const [accountManagers, setAccountManagers] = useState([]);
   const [appointments, setAppointments] = useState([]);
@@ -839,6 +848,16 @@ function MarketingDashboard({ data, onSignOut }) {
   const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
   const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
 
+  // Overview dashboard metrics — aggregated across every client
+  const [overviewStats, setOverviewStats] = useState(null);
+
+  // Tasks — assignable to any account manager, optionally linked to a client
+  const [tasks, setTasks] = useState([]);
+  const [taskFilter, setTaskFilter] = useState("open"); // open | completed | all
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [newTask, setNewTask] = useState({ title: "", notes: "", due_date: "", account_manager_id: "", business_id: "" });
+  const [savingTask, setSavingTask] = useState(false);
+
   // Connecting a client's Google Business Profile using the marketing company's
   // own login (works as long as they've been added as a Manager on that client's
   // listing — see buildGoogleConnectUrl / /google/locations picker flow).
@@ -847,7 +866,7 @@ function MarketingDashboard({ data, onSignOut }) {
   const [googleLocationChoices, setGoogleLocationChoices] = useState(null); // { businessId, accessToken, locations }
   const [showGoogleLocationPicker, setShowGoogleLocationPicker] = useState(false);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { loadAll(); loadTasks(); }, []);
 
   // Handle returning from Google's OAuth screen for a specific client business.
   // The App-level effect (top of file) stashes ?code and ?state into
@@ -918,12 +937,61 @@ function MarketingDashboard({ data, onSignOut }) {
           unread.forEach(m => { chatCounts[m.business_id] = (chatCounts[m.business_id] || 0) + 1; });
           setUnreadChatByBiz(chatCounts);
         }
+
+        // Overview metrics — aggregate send activity across every client
+        const now = new Date();
+        const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+        const { data: allMsgs } = await supabase.from("messages").select("business_id, sent_at").in("business_id", ids);
+        const totalSent = allMsgs?.length || 0;
+        const sentThisMonth = allMsgs?.filter(m => new Date(m.sent_at) >= new Date(monthStart)).length || 0;
+        const googleConnectedCount = biz.filter(b => b.google_access_token && b.google_location_id).length;
+        setOverviewStats({
+          totalClients: biz.length,
+          googleConnectedCount,
+          totalSent,
+          sentThisMonth,
+        });
+      } else {
+        setOverviewStats({ totalClients: 0, googleConnectedCount: 0, totalSent: 0, sentThisMonth: 0 });
       }
     }
     const { data: ams } = await supabase.from("account_managers").select("*").eq("marketing_company_id", data.id).order("name");
     if (ams) setAccountManagers(ams);
     const { data: appts } = await supabase.from("appointments").select("*").eq("marketing_company_id", data.id).order("starts_at");
     if (appts) setAppointments(appts);
+  };
+
+  const loadTasks = async () => {
+    const { data: rows } = await supabase.from("tasks").select("*").eq("marketing_company_id", data.id).order("due_date", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false });
+    if (rows) setTasks(rows);
+  };
+
+  const addTask = async () => {
+    if (!newTask.title.trim()) return;
+    setSavingTask(true);
+    const { data: inserted } = await supabase.from("tasks").insert([{
+      marketing_company_id: data.id,
+      account_manager_id: newTask.account_manager_id || null,
+      business_id: newTask.business_id || null,
+      title: newTask.title.trim(),
+      notes: newTask.notes.trim() || null,
+      due_date: newTask.due_date || null,
+    }]).select().single();
+    if (inserted) setTasks(prev => [inserted, ...prev]);
+    setNewTask({ title: "", notes: "", due_date: "", account_manager_id: "", business_id: "" });
+    setShowAddTask(false);
+    setSavingTask(false);
+  };
+
+  const toggleTaskComplete = async (task) => {
+    const completed = !task.completed;
+    const { data: updated } = await supabase.from("tasks").update({ completed, completed_at: completed ? new Date().toISOString() : null }).eq("id", task.id).select().single();
+    if (updated) setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
+  };
+
+  const deleteTask = async (taskId) => {
+    await supabase.from("tasks").delete().eq("id", taskId);
+    setTasks(prev => prev.filter(t => t.id !== taskId));
   };
 
   const businessNameById = businesses.reduce((acc, b) => { acc[b.id] = b.name; return acc; }, {});
@@ -1103,7 +1171,7 @@ function MarketingDashboard({ data, onSignOut }) {
       {/* Sidebar */}
       <div style={{ width: 200, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, padding: "20px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
         <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 4, color: C.gold, padding: "0 8px 20px" }}>★ REVIEWSEND</div>
-        {[["calendar", "Calendar"], ["clients", "Clients"], ["photos", "Photos"], ["managers", "Managers"]].map(([id, label]) => (
+        {[["overview", "Overview"], ["calendar", "Calendar"], ["clients", "Clients"], ["photos", "Photos"], ["managers", "Managers"]].map(([id, label]) => (
           <button key={id} onClick={() => setView(id)}
             style={{ display: "flex", alignItems: "center", padding: "10px 12px", borderRadius: 8, border: "none", background: view === id ? "#EEF3FA" : "transparent", color: view === id ? C.gold : C.textMuted, fontFamily: font.body, fontSize: 14, fontWeight: view === id ? 600 : 400, textAlign: "left", cursor: "pointer" }}>
             {label}
@@ -1120,14 +1188,144 @@ function MarketingDashboard({ data, onSignOut }) {
       <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 32px", borderBottom: `1px solid ${C.border}`, background: C.surface, position: "sticky", top: 0, zIndex: 10 }}>
           <div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>
-            {view === "calendar" ? "Calendar — every account manager" : view === "clients" ? "Clients" : view === "photos" ? "Photos — by client" : "Account Managers"}
+            {view === "overview" ? "Overview" : view === "calendar" ? "Calendar — every account manager" : view === "clients" ? "Clients" : view === "photos" ? "Photos — by client" : "Account Managers"}
           </div>
-          {view === "clients" && <button onClick={() => setShowAddClient(true)} style={{ ...btnStyle, fontSize: 14 }}>+ Add Client</button>}
+          {view === "overview" && <button onClick={() => setShowAddTask(true)} style={{ ...btnStyle, fontSize: 14 }}>+ Add Task</button>}
+          {view === "clients" && !selectedBusiness && <button onClick={() => setShowAddClient(true)} style={{ ...btnStyle, fontSize: 14 }}>+ Add Client</button>}
           {view === "managers" && <button onClick={() => setShowAddManager(true)} style={{ ...btnStyle, fontSize: 14 }}>+ Add Manager</button>}
           {(view === "calendar" || view === "clients") && <button onClick={() => openScheduleModal(null, null, null)} style={{ ...btnStyle, fontSize: 14 }}>+ Schedule</button>}
         </div>
 
         <div style={{ padding: 32 }}>
+
+          {view === "overview" && (
+            <div className="fade-up">
+              {/* Metrics grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 28 }}>
+                {[
+                  { label: "Total Clients", value: overviewStats?.totalClients ?? "—", color: C.gold },
+                  { label: "Google Connected", value: overviewStats ? `${overviewStats.googleConnectedCount}/${overviewStats.totalClients}` : "—", color: "#1A8C4E" },
+                  { label: "Sent This Month", value: overviewStats?.sentThisMonth ?? "—", color: "#4A90D9" },
+                  { label: "Total Sent All Time", value: overviewStats?.totalSent ?? "—", color: "#7C3AED" },
+                ].map((s) => (
+                  <div key={s.label} style={{ ...card, padding: "20px 18px", textAlign: "center" }}>
+                    <div style={{ fontFamily: font.display, fontSize: 30, fontWeight: 700, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                    <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, marginTop: 8 }}>{s.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Attention needed */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 28 }}>
+                <div style={{ ...card, padding: 20 }}>
+                  <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 2, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 14 }}>Needs Attention</div>
+                  {(() => {
+                    const pendingClients = Object.entries(pendingPhotosByBiz).filter(([, c]) => c > 0);
+                    const unreadClients = Object.entries(unreadChatByBiz).filter(([, c]) => c > 0);
+                    if (pendingClients.length === 0 && unreadClients.length === 0) {
+                      return <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted }}>Nothing needs attention right now.</div>;
+                    }
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {pendingClients.map(([bizId, count]) => (
+                          <div key={"p" + bizId} onClick={() => { const b = businesses.find(x => x.id === bizId); if (b) { setView("clients"); selectBusiness(b); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+                            <span style={{ fontFamily: font.body, fontSize: 14, color: C.text }}>{businessNameById[bizId] || "Unknown"} — pending photos</span>
+                            <span style={{ background: "#FFF3CD", color: "#856404", fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 99 }}>{count}</span>
+                          </div>
+                        ))}
+                        {unreadClients.map(([bizId, count]) => (
+                          <div key={"u" + bizId} onClick={() => { const b = businesses.find(x => x.id === bizId); if (b) { setView("clients"); selectBusiness(b); } }} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+                            <span style={{ fontFamily: font.body, fontSize: 14, color: C.text }}>{businessNameById[bizId] || "Unknown"} — unread messages</span>
+                            <span style={{ background: "#FDEDEC", color: "#C0392B", fontSize: 12, fontWeight: 700, padding: "2px 9px", borderRadius: 99 }}>{count}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div style={{ ...card, padding: 20 }}>
+                  <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 2, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 14 }}>Upcoming Appointments</div>
+                  {(() => {
+                    const now = new Date();
+                    const upcoming = appointments.filter(a => new Date(a.starts_at) >= now).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at)).slice(0, 5);
+                    if (upcoming.length === 0) return <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted }}>Nothing scheduled.</div>;
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {upcoming.map(a => (
+                          <div key={a.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                            <span style={{ fontFamily: font.body, fontSize: 14, color: C.text }}>{businessNameById[a.business_id]} — {a.title}</span>
+                            <span style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>{new Date(a.starts_at).toLocaleDateString([], { month: "short", day: "numeric" })}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Tasks */}
+              <div style={{ ...card, padding: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 2, color: C.textSub, textTransform: "uppercase", fontWeight: 700 }}>Tasks</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["open", "completed", "all"].map(f => (
+                      <button key={f} onClick={() => setTaskFilter(f)} style={{ padding: "5px 12px", borderRadius: 99, border: `1.5px solid ${taskFilter === f ? C.gold : C.border}`, background: taskFilter === f ? "#EEF3FA" : "transparent", color: taskFilter === f ? C.gold : C.textMuted, fontFamily: font.body, fontSize: 12, fontWeight: 600, cursor: "pointer", textTransform: "capitalize" }}>{f}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {showAddTask && (
+                  <div style={{ background: C.surfaceHover, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <input value={newTask.title} onChange={e => setNewTask(t => ({ ...t, title: e.target.value }))} placeholder="Task title" style={{ ...inputStyle, marginBottom: 8 }} />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 8 }}>
+                      <select value={newTask.account_manager_id} onChange={e => setNewTask(t => ({ ...t, account_manager_id: e.target.value }))} style={inputStyle}>
+                        <option value="">Unassigned</option>
+                        {accountManagers.map(am => <option key={am.id} value={am.id}>{am.name}</option>)}
+                      </select>
+                      <select value={newTask.business_id} onChange={e => setNewTask(t => ({ ...t, business_id: e.target.value }))} style={inputStyle}>
+                        <option value="">No client linked</option>
+                        {businesses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                      </select>
+                    </div>
+                    <input type="date" value={newTask.due_date} onChange={e => setNewTask(t => ({ ...t, due_date: e.target.value }))} style={{ ...inputStyle, marginBottom: 8 }} />
+                    <textarea rows={2} value={newTask.notes} onChange={e => setNewTask(t => ({ ...t, notes: e.target.value }))} placeholder="Notes (optional)" style={{ ...inputStyle, resize: "vertical", marginBottom: 10 }} />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={addTask} disabled={savingTask || !newTask.title.trim()} style={{ ...btnStyle, fontSize: 13, padding: "8px 16px" }}>{savingTask ? "Adding…" : "Add Task"}</button>
+                      <button onClick={() => setShowAddTask(false)} style={{ ...ghostBtnStyle, fontSize: 13, padding: "8px 16px" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {(() => {
+                  const filtered = tasks.filter(t => taskFilter === "all" ? true : taskFilter === "completed" ? t.completed : !t.completed);
+                  if (filtered.length === 0) return <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, textAlign: "center", padding: "20px 0" }}>No {taskFilter === "all" ? "" : taskFilter} tasks.</div>;
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {filtered.map(t => {
+                        const overdue = t.due_date && !t.completed && new Date(t.due_date) < new Date(new Date().toDateString());
+                        return (
+                          <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 4px", borderBottom: `1px solid ${C.border}` }}>
+                            <button onClick={() => toggleTaskComplete(t)} style={{ width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${t.completed ? C.green : C.border}`, background: t.completed ? C.green : "#fff", color: "#fff", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, marginTop: 1 }}>{t.completed ? "✓" : ""}</button>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontFamily: font.body, fontSize: 14, fontWeight: 600, color: t.completed ? C.textMuted : C.text, textDecoration: t.completed ? "line-through" : "none" }}>{t.title}</div>
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 3 }}>
+                                {t.account_manager_id && managerNameById[t.account_manager_id] && <span style={{ fontFamily: font.body, fontSize: 12, color: C.gold }}>👤 {managerNameById[t.account_manager_id]}</span>}
+                                {t.business_id && businessNameById[t.business_id] && <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>· {businessNameById[t.business_id]}</span>}
+                                {t.due_date && <span style={{ fontFamily: font.body, fontSize: 12, color: overdue ? "#C0392B" : C.textMuted }}>· Due {new Date(t.due_date).toLocaleDateString([], { month: "short", day: "numeric" })}{overdue ? " (overdue)" : ""}</span>}
+                              </div>
+                              {t.notes && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 4 }}>{t.notes}</div>}
+                            </div>
+                            <button onClick={() => deleteTask(t.id)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 16, lineHeight: 1, flexShrink: 0 }}>×</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
 
           {view === "calendar" && (
             <div className="fade-up">
@@ -1168,6 +1366,7 @@ function MarketingDashboard({ data, onSignOut }) {
 
           {view === "clients" && (
             <div className="fade-up" style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+              {!selectedBusiness && (
               <div style={{ width: 300, flexShrink: 0 }}>
                 {showAddClient && (
                   <div style={{ ...card, marginBottom: 16 }}>
@@ -1202,12 +1401,14 @@ function MarketingDashboard({ data, onSignOut }) {
                   {filteredBusinesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, textAlign: "center", padding: 30 }}>{searchQuery ? "No clients match." : "No clients yet."}</div>}
                 </div>
               </div>
+              )}
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 {!selectedBusiness ? (
                   <div style={{ ...card, padding: 60, textAlign: "center", color: C.textMuted, fontFamily: font.body, fontSize: 14 }}>Select a client from the list to view their workspace.</div>
                 ) : (
                   <div>
+                    <button onClick={() => setSelectedBusiness(null)} style={{ ...ghostBtnStyle, fontSize: 13, padding: "7px 14px", marginBottom: 16, display: "inline-flex", alignItems: "center", gap: 6 }}>← All clients</button>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
                       <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
                       <div><div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>{selectedBusiness.name}</div><div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{selectedBusiness.email}</div></div>
@@ -1265,7 +1466,7 @@ function MarketingDashboard({ data, onSignOut }) {
                     </div>
 
                     <div style={{ marginBottom: 16 }}>
-                      <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadAll} />
+                      <PhotosTab key={selectedBusiness.id} businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadAll} />
                     </div>
 
                     <div style={{ ...card, padding: 20, marginBottom: 16 }}>
@@ -1273,6 +1474,7 @@ function MarketingDashboard({ data, onSignOut }) {
                     </div>
 
                     <ClientSettingsFull
+                      key={selectedBusiness.id}
                       business={selectedBusiness}
                       onSaved={(updated) => setSelectedBusiness(updated)}
                       onDeleteClient={(biz) => { setBusinessToDelete(biz); setDeleteConfirmText(""); setShowDeleteModal(true); }}
@@ -1602,6 +1804,23 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
     setLogoUrl(null);
   };
 
+  const downloadLogo = async () => {
+    if (!logoUrl) return;
+    try {
+      const res = await fetch(logoUrl);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const ext = (logoUrl.split(".").pop() || "png").split("?")[0];
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${(business.name || "logo").replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-logo.${ext}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      window.open(logoUrl, "_blank"); // fallback: open in a new tab if the direct download fails (e.g. CORS)
+    }
+  };
+
   const addEmployee = async () => {
     if (!newEmp.name || !newEmp.email || !newEmp.password) { alert("Fill in all fields."); return; }
     if (newEmp.password.length < 6) { alert("Password must be at least 6 characters."); return; }
@@ -1661,6 +1880,7 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
         {logoUrl ? (
           <>
             <img src={logoUrl} alt="Logo" style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover", border: `1px solid ${C.border}` }} />
+            <button onClick={downloadLogo} style={{ ...ghostBtnStyle, fontSize: 12, padding: "6px 12px" }}>Download logo</button>
             <button onClick={removeLogo} style={{ ...ghostBtnStyle, fontSize: 12, padding: "6px 12px" }}>Remove logo</button>
           </>
         ) : (
@@ -1759,7 +1979,7 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
 
 // ── MAIN ACCOUNT MANAGER DASHBOARD ────────────────────────────────────────────
 function AccountManagerDashboard({ data, onSignOut }) {
-  const [view, setView] = useState("calendar"); // calendar | clients | photos
+  const [view, setView] = useState("calendar"); // calendar | clients | photos | tasks
   const [businesses, setBusinesses] = useState([]);
   const [appointments, setAppointments] = useState([]);
   const [selectedBusiness, setSelectedBusiness] = useState(null);
@@ -1778,6 +1998,14 @@ function AccountManagerDashboard({ data, onSignOut }) {
   const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
   const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
 
+  // Tasks assigned to this account manager (or unassigned, company-wide ones
+  // they've chosen to pick up)
+  const [tasks, setTasks] = useState([]);
+  const [taskFilter, setTaskFilter] = useState("open"); // open | completed | all
+  const [showAddTask, setShowAddTask] = useState(false);
+  const [newTask, setNewTask] = useState({ title: "", notes: "", due_date: "", business_id: "" });
+  const [savingTask, setSavingTask] = useState(false);
+
   // Connecting a client's Google Business Profile using the account manager's
   // own login (works as long as they've been added as a Manager on that client's
   // listing — see buildGoogleConnectUrl / /google/locations picker flow).
@@ -1786,7 +2014,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
   const [googleLocationChoices, setGoogleLocationChoices] = useState(null); // { businessId, accessToken, locations }
   const [showGoogleLocationPicker, setShowGoogleLocationPicker] = useState(false);
 
-  useEffect(() => { loadAll(); }, []);
+  useEffect(() => { loadAll(); loadTasks(); }, []);
 
   // Handle returning from Google's OAuth screen for a specific client business.
   useEffect(() => {
@@ -1858,6 +2086,39 @@ function AccountManagerDashboard({ data, onSignOut }) {
     }
     const { data: appts } = await supabase.from("appointments").select("*").eq("account_manager_id", data.id).order("starts_at");
     if (appts) setAppointments(appts);
+  };
+
+  const loadTasks = async () => {
+    const { data: rows } = await supabase.from("tasks").select("*").eq("account_manager_id", data.id).order("due_date", { ascending: true, nullsFirst: false }).order("created_at", { ascending: false });
+    if (rows) setTasks(rows);
+  };
+
+  const addTask = async () => {
+    if (!newTask.title.trim()) return;
+    setSavingTask(true);
+    const { data: inserted } = await supabase.from("tasks").insert([{
+      marketing_company_id: data.marketing_company_id || null,
+      account_manager_id: data.id,
+      business_id: newTask.business_id || null,
+      title: newTask.title.trim(),
+      notes: newTask.notes.trim() || null,
+      due_date: newTask.due_date || null,
+    }]).select().single();
+    if (inserted) setTasks(prev => [inserted, ...prev]);
+    setNewTask({ title: "", notes: "", due_date: "", business_id: "" });
+    setShowAddTask(false);
+    setSavingTask(false);
+  };
+
+  const toggleTaskComplete = async (task) => {
+    const completed = !task.completed;
+    const { data: updated } = await supabase.from("tasks").update({ completed, completed_at: completed ? new Date().toISOString() : null }).eq("id", task.id).select().single();
+    if (updated) setTasks(prev => prev.map(t => t.id === updated.id ? updated : t));
+  };
+
+  const deleteTask = async (taskId) => {
+    await supabase.from("tasks").delete().eq("id", taskId);
+    setTasks(prev => prev.filter(t => t.id !== taskId));
   };
 
   const businessNameById = businesses.reduce((acc, b) => { acc[b.id] = b.name; return acc; }, {});
@@ -1951,7 +2212,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
       {/* Sidebar */}
       <div style={{ width: 200, flexShrink: 0, background: C.surface, borderRight: `1px solid ${C.border}`, padding: "20px 14px", display: "flex", flexDirection: "column", gap: 4 }}>
         <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 4, color: C.gold, padding: "0 8px 20px" }}>★ REVIEWSEND</div>
-        {[["calendar", "Calendar"], ["clients", "Clients"], ["photos", "Photos"]].map(([id, label]) => (
+        {[["calendar", "Calendar"], ["clients", "Clients"], ["tasks", "Tasks"], ["photos", "Photos"]].map(([id, label]) => (
           <button key={id} onClick={() => setView(id)}
             style={{ display: "flex", alignItems: "center", padding: "10px 12px", borderRadius: 8, border: "none", background: view === id ? "#EEF3FA" : "transparent", color: view === id ? C.gold : C.textMuted, fontFamily: font.body, fontSize: 14, fontWeight: view === id ? 600 : 400, textAlign: "left", cursor: "pointer" }}>
             {label}
@@ -1968,12 +2229,73 @@ function AccountManagerDashboard({ data, onSignOut }) {
       <div style={{ flex: 1, minWidth: 0, overflowY: "auto" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "20px 32px", borderBottom: `1px solid ${C.border}`, background: C.surface, position: "sticky", top: 0, zIndex: 10 }}>
           <div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>
-            {view === "calendar" ? "Calendar" : view === "clients" ? "Clients" : "Photos — by client"}
+            {view === "calendar" ? "Calendar" : view === "clients" ? "Clients" : view === "tasks" ? "Tasks" : "Photos — by client"}
           </div>
-          <button onClick={() => openScheduleModal(null, null, null)} style={{ ...btnStyle, fontSize: 14 }}>+ Schedule</button>
+          {view === "tasks" ? (
+            <button onClick={() => setShowAddTask(true)} style={{ ...btnStyle, fontSize: 14 }}>+ Add Task</button>
+          ) : (
+            <button onClick={() => openScheduleModal(null, null, null)} style={{ ...btnStyle, fontSize: 14 }}>+ Schedule</button>
+          )}
         </div>
 
         <div style={{ padding: 32 }}>
+
+          {view === "tasks" && (
+            <div className="fade-up">
+              <div style={{ ...card, padding: 20 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+                  <div style={{ fontFamily: font.body, fontSize: 13, letterSpacing: 2, color: C.textSub, textTransform: "uppercase", fontWeight: 700 }}>My Tasks</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {["open", "completed", "all"].map(f => (
+                      <button key={f} onClick={() => setTaskFilter(f)} style={{ padding: "5px 12px", borderRadius: 99, border: `1.5px solid ${taskFilter === f ? C.gold : C.border}`, background: taskFilter === f ? "#EEF3FA" : "transparent", color: taskFilter === f ? C.gold : C.textMuted, fontFamily: font.body, fontSize: 12, fontWeight: 600, cursor: "pointer", textTransform: "capitalize" }}>{f}</button>
+                    ))}
+                  </div>
+                </div>
+
+                {showAddTask && (
+                  <div style={{ background: C.surfaceHover, borderRadius: 12, padding: 16, marginBottom: 16 }}>
+                    <input value={newTask.title} onChange={e => setNewTask(t => ({ ...t, title: e.target.value }))} placeholder="Task title" style={{ ...inputStyle, marginBottom: 8 }} />
+                    <select value={newTask.business_id} onChange={e => setNewTask(t => ({ ...t, business_id: e.target.value }))} style={{ ...inputStyle, marginBottom: 8 }}>
+                      <option value="">No client linked</option>
+                      {businesses.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                    </select>
+                    <input type="date" value={newTask.due_date} onChange={e => setNewTask(t => ({ ...t, due_date: e.target.value }))} style={{ ...inputStyle, marginBottom: 8 }} />
+                    <textarea rows={2} value={newTask.notes} onChange={e => setNewTask(t => ({ ...t, notes: e.target.value }))} placeholder="Notes (optional)" style={{ ...inputStyle, resize: "vertical", marginBottom: 10 }} />
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button onClick={addTask} disabled={savingTask || !newTask.title.trim()} style={{ ...btnStyle, fontSize: 13, padding: "8px 16px" }}>{savingTask ? "Adding…" : "Add Task"}</button>
+                      <button onClick={() => setShowAddTask(false)} style={{ ...ghostBtnStyle, fontSize: 13, padding: "8px 16px" }}>Cancel</button>
+                    </div>
+                  </div>
+                )}
+
+                {(() => {
+                  const filtered = tasks.filter(t => taskFilter === "all" ? true : taskFilter === "completed" ? t.completed : !t.completed);
+                  if (filtered.length === 0) return <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted, textAlign: "center", padding: "20px 0" }}>No {taskFilter === "all" ? "" : taskFilter} tasks.</div>;
+                  return (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                      {filtered.map(t => {
+                        const overdue = t.due_date && !t.completed && new Date(t.due_date) < new Date(new Date().toDateString());
+                        return (
+                          <div key={t.id} style={{ display: "flex", alignItems: "flex-start", gap: 12, padding: "10px 4px", borderBottom: `1px solid ${C.border}` }}>
+                            <button onClick={() => toggleTaskComplete(t)} style={{ width: 20, height: 20, borderRadius: 6, border: `1.5px solid ${t.completed ? C.green : C.border}`, background: t.completed ? C.green : "#fff", color: "#fff", fontSize: 12, display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", flexShrink: 0, marginTop: 1 }}>{t.completed ? "✓" : ""}</button>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontFamily: font.body, fontSize: 14, fontWeight: 600, color: t.completed ? C.textMuted : C.text, textDecoration: t.completed ? "line-through" : "none" }}>{t.title}</div>
+                              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 3 }}>
+                                {t.business_id && businessNameById[t.business_id] && <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>{businessNameById[t.business_id]}</span>}
+                                {t.due_date && <span style={{ fontFamily: font.body, fontSize: 12, color: overdue ? "#C0392B" : C.textMuted }}>· Due {new Date(t.due_date).toLocaleDateString([], { month: "short", day: "numeric" })}{overdue ? " (overdue)" : ""}</span>}
+                              </div>
+                              {t.notes && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 4 }}>{t.notes}</div>}
+                            </div>
+                            <button onClick={() => deleteTask(t.id)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 16, lineHeight: 1, flexShrink: 0 }}>×</button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
 
           {view === "calendar" && (
             <div className="fade-up">
@@ -2010,6 +2332,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
 
           {view === "clients" && (
             <div className="fade-up" style={{ display: "flex", gap: 20, alignItems: "flex-start" }}>
+              {!selectedBusiness && (
               <div style={{ width: 300, flexShrink: 0 }}>
                 <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search clients…" style={{ ...inputStyle, marginBottom: 16 }} />
                 <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: "calc(100vh - 240px)", overflowY: "auto" }}>
@@ -2028,12 +2351,14 @@ function AccountManagerDashboard({ data, onSignOut }) {
                   {filteredBusinesses.length === 0 && <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, textAlign: "center", padding: 30 }}>No clients match.</div>}
                 </div>
               </div>
+              )}
 
               <div style={{ flex: 1, minWidth: 0 }}>
                 {!selectedBusiness ? (
                   <div style={{ ...card, padding: 60, textAlign: "center", color: C.textMuted, fontFamily: font.body, fontSize: 14 }}>Select a client from the list to view their workspace.</div>
                 ) : (
                   <div>
+                    <button onClick={() => setSelectedBusiness(null)} style={{ ...ghostBtnStyle, fontSize: 13, padding: "7px 14px", marginBottom: 16, display: "inline-flex", alignItems: "center", gap: 6 }}>← All clients</button>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 4 }}>
                       <div style={{ width: 44, height: 44, borderRadius: "50%", background: "#EEF3FA", color: C.gold, fontFamily: font.display, fontSize: 18, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center" }}>{selectedBusiness.name.charAt(0)}</div>
                       <div><div style={{ fontFamily: font.display, fontSize: 20, fontWeight: 600 }}>{selectedBusiness.name}</div><div style={{ fontFamily: font.mono, fontSize: 13, color: C.textMuted }}>{selectedBusiness.email}</div></div>
@@ -2083,7 +2408,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
                     </div>
 
                     <div style={{ marginBottom: 16 }}>
-                      <PhotosTab businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadAll} />
+                      <PhotosTab key={selectedBusiness.id} businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadAll} />
                     </div>
 
                     <div style={{ ...card, padding: 20, marginBottom: 16 }}>
@@ -2091,6 +2416,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
                     </div>
 
                     <ClientSettingsFull
+                      key={selectedBusiness.id}
                       business={selectedBusiness}
                       onSaved={(updated) => setSelectedBusiness(updated)}
                       onConnectGoogle={() => handleConnectGoogleClick(selectedBusiness)}
@@ -3599,7 +3925,7 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
   const copyCaption = () => { navigator.clipboard.writeText(generatedCaption); setCaptionCopied(true); setTimeout(() => setCaptionCopied(false), 2000); };
   const confirmPosted = async () => { if (!captionModal) return; await togglePlatform(captionModal.photo, captionModal.platformId); closeCaptionModal(); };
 
-  useEffect(() => { loadPhotos(); }, []);
+  useEffect(() => { loadPhotos(); }, [businessId]);
 
   const loadPhotos = async () => {
     const query = isAdmin ? supabase.from("photos").select("*, businesses(name)").order("created_at", { ascending: false }) : supabase.from("photos").select("*").eq("business_id", businessId).order("created_at", { ascending: false });
