@@ -3982,17 +3982,17 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
   const [generating, setGenerating] = useState(false);
   const [captionCopied, setCaptionCopied] = useState(false);
   const [activePlatform, setActivePlatform] = useState(null);
+  const PHOTOS_PAGE_SIZE = 5;
+  const [visibleCount, setVisibleCount] = useState(PHOTOS_PAGE_SIZE);
 
   const PHOTO_PLATFORMS = [
-    { id: "google", label: "GP", fullLabel: "Google", color: "#4A90D9" },
-    { id: "google_campaign", label: "GP2", fullLabel: "Google Photos", color: "#1A8C4E" },
-    { id: "instagram", label: "IG", fullLabel: "Instagram", color: "#E1306C" },
+    { id: "google", label: "G", fullLabel: "Google", color: "#4A90D9" },
     { id: "facebook", label: "FB", fullLabel: "Facebook", color: "#1877F2" },
+    { id: "instagram", label: "IG", fullLabel: "Instagram", color: "#E1306C" },
   ];
 
   const PLATFORM_PROMPTS = {
-    google: "Write an SEO-optimized Google Business photo description. Use keywords naturally. No hashtags. 2-3 sentences max. Focus on location, business type, and what makes this business unique.",
-    google_campaign: "Write an SEO-optimized Google Photos caption. Use keywords naturally including the city and state. No hashtags. 2-3 sentences describing what is shown and the business.",
+    google: "Write an SEO-optimized Google Business photo description. Use keywords naturally, including the city and state. No hashtags. 2-3 sentences describing what's shown and what makes this business unique.",
     instagram: "Write an engaging Instagram caption. Conversational, warm tone. 2-3 sentences then a line break followed by 15 relevant hashtags including the city and business type.",
     facebook: "Write a warm Facebook post caption. Community-focused tone, no hashtags. 2-3 sentences. End with a soft call to action.",
   };
@@ -4024,7 +4024,7 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
   const copyCaption = () => { navigator.clipboard.writeText(generatedCaption); setCaptionCopied(true); setTimeout(() => setCaptionCopied(false), 2000); };
   const confirmPosted = async () => { if (!captionModal) return; await togglePlatform(captionModal.photo, captionModal.platformId); closeCaptionModal(); };
 
-  useEffect(() => { loadPhotos(); }, [businessId]);
+  useEffect(() => { loadPhotos(); setVisibleCount(PHOTOS_PAGE_SIZE); }, [businessId]);
 
   const loadPhotos = async () => {
     const query = isAdmin ? supabase.from("photos").select("*, businesses(name)").order("created_at", { ascending: false }) : supabase.from("photos").select("*").eq("business_id", businessId).order("created_at", { ascending: false });
@@ -4060,8 +4060,18 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
   const togglePlatform = async (photo, platform) => {
     const current = photo.posted_platforms || [];
     const updated = current.includes(platform) ? current.filter(p => p !== platform) : [...current, platform];
-    const newStatus = updated.length > 0 ? "posted" : (photo.status === "posted" ? "downloaded" : photo.status);
-    await supabase.from("photos").update({ posted_platforms: updated, status: newStatus, ...(updated.length > 0 ? { posted_at: new Date().toISOString() } : {}) }).eq("id", photo.id);
+    // Just tracks which platforms this photo went to — no longer touches
+    // `status`. "Posted" (the signal the client actually sees) is now its own
+    // explicit action via togglePosted, independent of which platforms are checked.
+    await supabase.from("photos").update({ posted_platforms: updated }).eq("id", photo.id);
+    loadPhotos();
+    if (onStatusChange) onStatusChange();
+  };
+
+  const togglePosted = async (photo) => {
+    const isPosted = photo.status === "posted";
+    const newStatus = isPosted ? (photo.downloaded_at ? "downloaded" : "pending") : "posted";
+    await supabase.from("photos").update({ status: newStatus, posted_at: isPosted ? null : new Date().toISOString() }).eq("id", photo.id);
     loadPhotos();
     if (onStatusChange) onStatusChange();
   };
@@ -4096,11 +4106,10 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
       {(() => {
         const renderPhotoCard = (photo) => {
           const postedPlatforms = photo.posted_platforms || [];
-          const isFullyPosted = postedPlatforms.length === PHOTO_PLATFORMS.length;
-          const isPartiallyPosted = postedPlatforms.length > 0 && !isFullyPosted;
+          const isPosted = photo.status === "posted";
           return (
             <div key={photo.id} style={{ background: "#fff", borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden", flexShrink: 0 }}>
-              <div style={{ height: 2, background: isFullyPosted ? "#1A8C4E" : isPartiallyPosted ? "#F59E0B" : photo.status === "downloaded" ? "#3B82F6" : "#E5E7EB" }} />
+              <div style={{ height: 2, background: isPosted ? "#1A8C4E" : photo.status === "downloaded" ? "#3B82F6" : "#E5E7EB" }} />
               <div style={{ padding: "12px 16px" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 10 }}>
                   <div style={{ width: 140, height: 140, borderRadius: 10, background: "#F4F7FB", border: `1px solid ${C.border}`, overflow: "hidden", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -4124,38 +4133,53 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
                     </div>
                   </div>
                   <div style={{ flexShrink: 0 }}>
-                    {isFullyPosted ? <span style={{ fontFamily: font.body, fontSize: 10, padding: "3px 10px", borderRadius: 99, background: "#DCFCE7", color: "#166534", border: "1px solid #BBF7D0", fontWeight: 600 }}>All Posted</span>
-                    : isPartiallyPosted ? <span style={{ fontFamily: font.body, fontSize: 10, padding: "3px 10px", borderRadius: 99, background: "#FEF9C3", color: "#854D0E", border: "1px solid #FDE68A", fontWeight: 600 }}>In Progress</span>
+                    {isPosted ? <span style={{ fontFamily: font.body, fontSize: 10, padding: "3px 10px", borderRadius: 99, background: "#DCFCE7", color: "#166534", border: "1px solid #BBF7D0", fontWeight: 600 }}>✓ Posted</span>
                     : photo.status === "downloaded" ? <span style={{ fontFamily: font.body, fontSize: 10, padding: "3px 10px", borderRadius: 99, background: "#DBEAFE", color: "#1E40AF", border: "1px solid #BFDBFE", fontWeight: 600 }}>Downloaded</span>
                     : <span style={{ fontFamily: font.body, fontSize: 10, padding: "3px 10px", borderRadius: 99, background: "#FFF7ED", color: "#9A3412", border: "1px solid #FED7AA", fontWeight: 600 }}>Pending</span>}
                   </div>
                 </div>
                 {(isAdmin || isMarketing) && (
                   <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-                        <span style={{ fontFamily: font.body, fontSize: 10, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginRight: 2 }}>Posted to</span>
                         {PHOTO_PLATFORMS.map(p => {
-                          const isPosted = postedPlatforms.includes(p.id);
+                          const isShared = postedPlatforms.includes(p.id);
                           const isLocked = features && ((p.id === "google" && features.google_posts === false) || ((p.id === "instagram" || p.id === "facebook") && features.social === false));
-                          if (isLocked) return <button key={p.id} disabled style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99, border: `1.5px solid ${C.border}`, background: "transparent", color: C.textSub, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "not-allowed", opacity: 0.5 }}>🔒 {p.label}</button>;
+                          if (isLocked) return <button key={p.id} disabled style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99, border: `1.5px solid ${C.border}`, background: "transparent", color: C.textSub, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "not-allowed", opacity: 0.5 }}>🔒 {p.fullLabel}</button>;
                           return (
-                            <button key={p.id} onClick={() => isPosted ? togglePlatform(photo, p.id) : p.id === "google_campaign" ? togglePlatform(photo, p.id) : openCaptionModal(photo, p.id)}
-                              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99, border: `1.5px solid ${isPosted ? p.color : C.border}`, background: isPosted ? p.color + "15" : "transparent", color: isPosted ? p.color : C.textMuted, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
-                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: isPosted ? p.color : C.border, display: "inline-block" }} />
-                              {p.label}
-                            </button>
+                            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 2 }}>
+                              <button onClick={() => togglePlatform(photo, p.id)}
+                                title={`Mark as shared to ${p.fullLabel}`}
+                                style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99, border: `1.5px solid ${isShared ? p.color : C.border}`, background: isShared ? p.color + "15" : "transparent", color: isShared ? p.color : C.textMuted, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
+                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: isShared ? p.color : C.border, display: "inline-block" }} />
+                                {p.fullLabel}
+                              </button>
+                              <button onClick={() => openCaptionModal(photo, p.id)} title={`Generate an AI caption for ${p.fullLabel}`}
+                                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, padding: "2px 4px", opacity: 0.55 }}>✨</button>
+                            </div>
                           );
                         })}
                       </div>
                       <button onClick={() => downloadPhoto(photo)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 6, border: `1px solid ${C.border}`, background: "transparent", color: C.textMuted, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>⬇ Download</button>
                     </div>
+                    <button onClick={() => togglePosted(photo)}
+                      style={{
+                        width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                        padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontFamily: font.body, fontSize: 12, fontWeight: 700,
+                        border: `1.5px solid ${isPosted ? "#1A8C4E" : C.gold}`,
+                        background: isPosted ? "#DCFCE7" : C.gold, color: isPosted ? "#166534" : "#fff",
+                      }}>
+                      {isPosted ? "✓ Posted — tap to undo" : "Mark as Posted"}
+                    </button>
                   </div>
                 )}
-                {!isAdmin && !isMarketing && postedPlatforms.length > 0 && (
-                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 2, display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-                    <span style={{ fontFamily: font.body, fontSize: 10, color: C.textMuted, fontWeight: 600 }}>Posted to:</span>
-                    {postedPlatforms.map(p => { const pl = PHOTO_PLATFORMS.find(x => x.id === p); return pl ? <span key={p} style={{ fontFamily: font.body, fontSize: 10, padding: "2px 8px", borderRadius: 99, background: pl.color + "15", color: pl.color, border: `1px solid ${pl.color}33`, fontWeight: 600 }}>{pl.fullLabel}</span> : null; })}
+                {!isAdmin && !isMarketing && (
+                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 8, marginTop: 2 }}>
+                    {isPosted ? (
+                      <span style={{ fontFamily: font.body, fontSize: 12, color: "#166534", fontWeight: 600, display: "flex", alignItems: "center", gap: 5 }}>✓ Posted{photo.posted_at ? ` · ${timeAgo(photo.posted_at)}` : ""}</span>
+                    ) : (
+                      <span style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted }}>Not yet posted</span>
+                    )}
                   </div>
                 )}
               </div>
@@ -4164,9 +4188,17 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
         };
 
         return (
-          <div style={{ maxHeight: 860, overflowY: "auto", paddingRight: 4, display: "flex", flexDirection: "column", gap: 16 }}>
-            {photos.map(renderPhotoCard)}
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {photos.slice(0, visibleCount).map(renderPhotoCard)}
             {photos.length === 0 && <div style={{ fontFamily: font.body, fontSize: 15, color: C.textMuted, textAlign: "center", padding: 40 }}>{isAdmin || isMarketing ? "No photos from clients yet." : "No photos uploaded yet."}</div>}
+            {visibleCount < photos.length && (
+              <button
+                onClick={() => setVisibleCount(c => c + PHOTOS_PAGE_SIZE)}
+                style={{ ...ghostBtnStyle, width: "100%", padding: "12px", fontSize: 14 }}
+              >
+                Load more ({photos.length - visibleCount} remaining)
+              </button>
+            )}
           </div>
         );
       })()}
@@ -4218,7 +4250,7 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
                 <button onClick={() => generateCaption(captionModal.photo, activePlatform)} disabled={generating} style={{ flex: 1, ...ghostBtnStyle, padding: "9px", fontSize: 13, fontWeight: 600 }}>🔄 Regenerate</button>
                 <button onClick={copyCaption} disabled={generating || !generatedCaption} style={{ flex: 1, padding: "9px", borderRadius: 8, border: `1px solid ${C.blue}`, background: captionCopied ? "#DCFCE7" : "#EFF6FF", color: captionCopied ? "#166534" : C.blue, fontFamily: font.body, fontSize: 13, fontWeight: 600, cursor: "pointer" }}>{captionCopied ? "✅ Copied!" : "📋 Copy Caption"}</button>
               </div>
-              <button onClick={confirmPosted} disabled={generating} style={{ ...btnStyle, width: "100%", padding: "11px" }}>✓ Mark as Posted to {PHOTO_PLATFORMS.find(p => p.id === activePlatform)?.fullLabel}</button>
+              <button onClick={confirmPosted} disabled={generating} style={{ ...btnStyle, width: "100%", padding: "11px" }}>✓ Tag as Shared to {PHOTO_PLATFORMS.find(p => p.id === activePlatform)?.fullLabel}</button>
             </div>
           </div>
         </div>
