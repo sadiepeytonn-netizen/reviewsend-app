@@ -74,6 +74,32 @@ function buildGoogleConnectUrl(businessId) {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
+// Used by the account manager / marketing company client workspace to pull a
+// client's live Google data without them being logged in as that client.
+// Mirrors the business-owner-side token refresh (getValidAccessToken inside
+// BusinessApp), just parameterized on an arbitrary business row instead of
+// the logged-in business owner's own `settings` state.
+async function getValidAccessTokenForBusiness(business) {
+  const expiry = business.google_token_expiry;
+  const bufferMs = 5 * 60 * 1000;
+  if (business.google_access_token && expiry && Date.now() < Number(expiry) - bufferMs) {
+    return business.google_access_token;
+  }
+  if (!business.google_refresh_token) return business.google_access_token;
+  try {
+    const res = await fetch(`${SERVER}/google/refresh-token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: business.google_refresh_token }) });
+    const result = await res.json();
+    if (result.success) {
+      const newExpiry = Date.now() + result.expires_in * 1000;
+      await supabase.from("businesses").update({ google_access_token: result.access_token, google_token_expiry: newExpiry }).eq("id", business.id);
+      return result.access_token;
+    }
+  } catch (err) {
+    // fall through — worst case the caller's subsequent fetch fails and surfaces its own error
+  }
+  return business.google_access_token;
+}
+
 // ── FEATURE 4: Photo upload validation ───────────────────────────────────────
 const ALLOWED_MIME_TYPES = new Set([
   "image/jpeg", "image/jpg", "image/png", "image/gif",
@@ -854,6 +880,13 @@ function MarketingDashboard({ data, onSignOut }) {
     return savedBizId ? (sessionStorage.getItem(RS_NS + "chatDraft_" + savedBizId) || "") : "";
   });
   const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
+
+  // Live Google data for whichever client is currently selected — folded
+  // directly into the existing Analytics section of the workspace.
+  const [clientGoogleData, setClientGoogleData] = useState(null);
+  const [clientPerformanceData, setClientPerformanceData] = useState(null);
+  const [clientGoogleLoading, setClientGoogleLoading] = useState(false);
+  const [activeMetric, setActiveMetric] = useState("search_views");
   const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
 
   // Overview dashboard metrics — aggregated across every client
@@ -1075,6 +1108,27 @@ function MarketingDashboard({ data, onSignOut }) {
     return appointments.filter(a => a.business_id === businessId && new Date(a.starts_at) >= now).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))[0];
   };
 
+  const loadClientGoogleData = async (biz) => {
+    if (!biz.google_access_token || !biz.google_location_id) {
+      setClientGoogleData(null);
+      setClientPerformanceData(null);
+      return;
+    }
+    setClientGoogleLoading(true);
+    setActiveMetric("search_views");
+    try {
+      const accessToken = await getValidAccessTokenForBusiness(biz);
+      const dataRes = await fetch(`${SERVER}/google/data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, account_id: biz.google_account_id, location_id: biz.google_location_id, business_id: biz.id }) }).then(r => r.json());
+      setClientGoogleData(dataRes.success ? dataRes : null);
+      const perfRes = await fetch(`${SERVER}/google/performance`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, location_id: biz.google_location_id }) }).then(r => r.json());
+      setClientPerformanceData(perfRes.success ? perfRes : null);
+    } catch (err) {
+      setClientGoogleData(null);
+      setClientPerformanceData(null);
+    }
+    setClientGoogleLoading(false);
+  };
+
   const selectBusiness = async (biz) => {
     setChatInput(sessionStorage.getItem(RS_NS + "chatDraft_" + biz.id) || "");
     setSelectedBusiness(biz);
@@ -1083,6 +1137,7 @@ function MarketingDashboard({ data, onSignOut }) {
     const { data: photos } = await supabase.from("photos").select("*").eq("business_id", biz.id);
     setBizPhotos(photos || []);
     await loadChat(biz.id);
+    loadClientGoogleData(biz); // fire-and-forget — don't block the rest of the workspace on this
   };
 
   const loadChat = async (bizId) => {
@@ -1517,6 +1572,15 @@ function MarketingDashboard({ data, onSignOut }) {
                       <PhotosTab key={selectedBusiness.id} businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadAll} />
                     </div>
 
+                    <ClientGooglePerformance
+                      business={selectedBusiness}
+                      googleData={clientGoogleData}
+                      performanceData={clientPerformanceData}
+                      loading={clientGoogleLoading}
+                      activeMetric={activeMetric}
+                      setActiveMetric={setActiveMetric}
+                    />
+
                     <div style={{ ...card, padding: 20, marginBottom: 16 }}>
                       <AnalyticsTab log={bizMessages} businessName={selectedBusiness.name} photos={bizPhotos} socialLinks={selectedBusiness.social_links || {}} embedded={true} />
                     </div>
@@ -1895,6 +1959,112 @@ function ClientFilesSection({ businessId, uploaderName }) {
   );
 }
 
+// ── CLIENT GOOGLE PERFORMANCE (shared by Marketing + Account Manager workspaces) ─
+// Folds live Google data (rating, reviews, performance metrics, 6-month trend)
+// directly into the existing per-client Analytics area — not a separate page,
+// not a tab, just an expansion of the section that's already there.
+function ClientGooglePerformance({ business, googleData, performanceData, loading, activeMetric, setActiveMetric }) {
+  if (!business?.google_access_token || !business?.google_location_id) {
+    return (
+      <div style={{ ...card, padding: 20, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 10, background: "#EEF3FA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>📊</div>
+        <div style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted }}>Google Business Profile isn't connected for this client yet — connect it in Settings below to see live performance here.</div>
+      </div>
+    );
+  }
+  if (loading || !googleData) {
+    return (
+      <div style={{ ...card, padding: 20, marginBottom: 16, textAlign: "center" }}>
+        <span style={{ fontFamily: font.body, fontSize: 14, color: C.textMuted }}>Loading Google performance…</span>
+      </div>
+    );
+  }
+
+  const METRICS = [
+    { id: "search_views", label: "Search Views", data: performanceData?.search_views },
+    { id: "calls", label: "Calls", data: performanceData?.calls },
+    { id: "direction_requests", label: "Directions", data: performanceData?.direction_requests },
+    { id: "website_clicks", label: "Website Clicks", data: performanceData?.website_clicks },
+  ];
+  const activeTrend = performanceData?.monthly_trends?.[activeMetric] || [];
+  const activeLabel = METRICS.find(m => m.id === activeMetric)?.label || "Search Views";
+
+  return (
+    <div style={{ ...card, padding: 22, marginBottom: 16 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+        <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#1A8C4E", flexShrink: 0 }} />
+        <span style={{ fontFamily: font.display, fontSize: 19, fontWeight: 600 }}>Google Performance</span>
+      </div>
+      <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginBottom: 18 }}>{googleData.location_name}</div>
+
+      {/* Rating snapshot */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+        {[
+          { label: "Rating", value: googleData.rating != null ? `${googleData.rating.toFixed(1)} ★` : "—" },
+          { label: "Total Reviews", value: googleData.review_count ?? "—" },
+          { label: "New This Month", value: googleData.new_this_month != null ? `+${googleData.new_this_month}` : "—" },
+          { label: "Response Rate", value: googleData.response_rate != null ? `${googleData.response_rate}%` : "—" },
+        ].map(s => (
+          <div key={s.label} style={{ textAlign: "center", padding: "12px 8px", background: C.bg, borderRadius: 10 }}>
+            <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 700, color: C.gold, lineHeight: 1 }}>{s.value}</div>
+            <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 4 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Metric chips — click one to change what the graph below shows */}
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+        {METRICS.map(m => {
+          const active = activeMetric === m.id;
+          return (
+            <button key={m.id} onClick={() => setActiveMetric(m.id)}
+              style={{ textAlign: "left", padding: "8px 14px", borderRadius: 10, border: `1.5px solid ${active ? C.gold : C.border}`, background: active ? "#EEF3FA" : "#fff", cursor: "pointer", minWidth: 120 }}>
+              <div style={{ fontFamily: font.body, fontSize: 11, color: active ? C.gold : C.textMuted }}>{m.label}</div>
+              <div style={{ fontFamily: font.display, fontSize: 17, fontWeight: 700, color: C.text }}>{m.data?.total != null ? m.data.total.toLocaleString() : "—"}</div>
+              {m.data?.delta != null && (
+                <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 600, color: m.data.delta >= 0 ? "#1A8C4E" : "#C0392B" }}>{m.data.delta >= 0 ? "↑" : "↓"} {Math.abs(m.data.delta)}%</div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 6-month graph for whichever metric is active */}
+      <div style={{ background: C.bg, borderRadius: 10, padding: 16 }}>
+        <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginBottom: 10 }}>{activeLabel} — last 6 months</div>
+        {activeTrend.length > 0 ? (
+          (() => {
+            const w = 600, h = 160;
+            const maxV = Math.max(...activeTrend.map(p => p.value), 1);
+            const stepX = activeTrend.length > 1 ? w / (activeTrend.length - 1) : 0;
+            const points = activeTrend.map((p, i) => ({
+              x: activeTrend.length > 1 ? i * stepX : w / 2,
+              y: h - (p.value / maxV) * (h - 20),
+              ...p,
+            }));
+            const linePoints = points.map(p => `${p.x},${p.y}`).join(" ");
+            const areaPoints = `${points[0].x},${h} ${linePoints} ${points[points.length - 1].x},${h}`;
+            return (
+              <svg viewBox={`0 0 ${w} ${h + 24}`} style={{ width: "100%", height: 180 }} preserveAspectRatio="none">
+                <polygon points={areaPoints} fill={C.gold} opacity="0.12" />
+                <polyline points={linePoints} fill="none" stroke={C.gold} strokeWidth="2.5" />
+                {points.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="4" fill={C.gold} />)}
+                {points.map((p, i) => (
+                  <text key={i} x={p.x} y={h + 18} fontSize="11" fill={C.textMuted} textAnchor="middle">
+                    {new Date(p.month + "-01T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+                  </text>
+                ))}
+              </svg>
+            );
+          })()
+        ) : (
+          <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, textAlign: "center", padding: "20px 0" }}>Not enough data yet.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── FULL CLIENT SETTINGS (everything the business owner can edit, editable here too) ─
 function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle, googleConnectLoading, googleConnectError }) {
   const [form, setForm] = useState({
@@ -2204,6 +2374,13 @@ function AccountManagerDashboard({ data, onSignOut }) {
     return savedBizId ? (sessionStorage.getItem(RS_NS + "chatDraft_" + savedBizId) || "") : "";
   });
   const [unreadChatByBiz, setUnreadChatByBiz] = useState({});
+
+  // Live Google data for whichever client is currently selected — folded
+  // directly into the existing Analytics section of the workspace.
+  const [clientGoogleData, setClientGoogleData] = useState(null);
+  const [clientPerformanceData, setClientPerformanceData] = useState(null);
+  const [clientGoogleLoading, setClientGoogleLoading] = useState(false);
+  const [activeMetric, setActiveMetric] = useState("search_views");
   const [pendingPhotosByBiz, setPendingPhotosByBiz] = useState({});
 
   // Overview dashboard metrics — aggregated across this manager's own clients
@@ -2414,6 +2591,27 @@ function AccountManagerDashboard({ data, onSignOut }) {
     return appointments.filter(a => a.business_id === businessId && new Date(a.starts_at) >= now).sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at))[0];
   };
 
+  const loadClientGoogleData = async (biz) => {
+    if (!biz.google_access_token || !biz.google_location_id) {
+      setClientGoogleData(null);
+      setClientPerformanceData(null);
+      return;
+    }
+    setClientGoogleLoading(true);
+    setActiveMetric("search_views");
+    try {
+      const accessToken = await getValidAccessTokenForBusiness(biz);
+      const dataRes = await fetch(`${SERVER}/google/data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, account_id: biz.google_account_id, location_id: biz.google_location_id, business_id: biz.id }) }).then(r => r.json());
+      setClientGoogleData(dataRes.success ? dataRes : null);
+      const perfRes = await fetch(`${SERVER}/google/performance`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, location_id: biz.google_location_id }) }).then(r => r.json());
+      setClientPerformanceData(perfRes.success ? perfRes : null);
+    } catch (err) {
+      setClientGoogleData(null);
+      setClientPerformanceData(null);
+    }
+    setClientGoogleLoading(false);
+  };
+
   const selectBusiness = async (biz) => {
     setChatInput(sessionStorage.getItem(RS_NS + "chatDraft_" + biz.id) || "");
     setSelectedBusiness(biz);
@@ -2422,6 +2620,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
     const { data: photos } = await supabase.from("photos").select("*").eq("business_id", biz.id);
     setBizPhotos(photos || []);
     await loadChat(biz.id);
+    loadClientGoogleData(biz); // fire-and-forget — don't block the rest of the workspace on this
   };
 
   const loadChat = async (bizId) => {
@@ -2765,6 +2964,15 @@ function AccountManagerDashboard({ data, onSignOut }) {
                     <div style={{ marginBottom: 16 }}>
                       <PhotosTab key={selectedBusiness.id} businessId={selectedBusiness.id} businessName={selectedBusiness.name} business={selectedBusiness} isMarketing={true} onStatusChange={loadAll} />
                     </div>
+
+                    <ClientGooglePerformance
+                      business={selectedBusiness}
+                      googleData={clientGoogleData}
+                      performanceData={clientPerformanceData}
+                      loading={clientGoogleLoading}
+                      activeMetric={activeMetric}
+                      setActiveMetric={setActiveMetric}
+                    />
 
                     <div style={{ ...card, padding: 20, marginBottom: 16 }}>
                       <AnalyticsTab log={bizMessages} businessName={selectedBusiness.name} photos={bizPhotos} socialLinks={selectedBusiness.social_links || {}} embedded={true} />
