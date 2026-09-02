@@ -1845,10 +1845,16 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
   };
 
   const addKeyword = async () => {
-    const kw = newKeyword.trim().toLowerCase();
-    if (!kw || seoKeywords.includes(kw)) { setNewKeyword(""); return; }
+    // Supports both a single keyword and a comma-separated batch pasted/typed
+    // in at once (e.g. "tree removal, stump grinding, tree trimming").
+    const incoming = newKeyword
+      .split(",")
+      .map(k => k.trim().toLowerCase())
+      .filter(Boolean);
+    if (incoming.length === 0) { setNewKeyword(""); return; }
     setSavingKeyword(true);
-    const updated = [...seoKeywords, kw];
+    const updated = [...seoKeywords];
+    incoming.forEach(kw => { if (!updated.includes(kw)) updated.push(kw); });
     await supabase.from("businesses").update({ seo_keywords: updated }).eq("id", business.id);
     setSeoKeywords(updated);
     setNewKeyword("");
@@ -1965,7 +1971,7 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
           value={newKeyword}
           onChange={e => setNewKeyword(e.target.value)}
           onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addKeyword())}
-          placeholder="e.g. tree removal"
+          placeholder="e.g. tree removal, stump grinding, tree trimming"
           style={{ ...inputStyle, flex: 1 }}
         />
         <button onClick={addKeyword} disabled={savingKeyword || !newKeyword.trim()} style={{ ...ghostBtnStyle, fontSize: 14, padding: "10px 18px" }}>+ Add</button>
