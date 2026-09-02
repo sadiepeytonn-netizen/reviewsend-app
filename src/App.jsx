@@ -4042,21 +4042,47 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
   };
 
   // Feature 4: photo upload with validation
+  const [uploadProgress, setUploadProgress] = useState(null); // { done, total } while a multi-upload is in flight
+
   const handleUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
     setUploadError("");
-    const validation = validateImageFile(file);
-    if (!validation.ok) { setUploadError(validation.error); e.target.value = ""; return; }
-    setUploading(true);
-    const fileName = `${businessId}/${Date.now()}-${file.name}`;
-    const { error: uploadErr } = await supabase.storage.from("business-photos").upload(fileName, file);
-    if (!uploadErr) {
-      await supabase.from("photos").insert([{ business_id: businessId, file_path: fileName, file_name: file.name, caption, status: "pending", posted_platforms: [] }]);
-      setCaption("");
-      loadPhotos();
+
+    // Validate every file up front so one bad file doesn't stop partway
+    // through and leave the person guessing which ones actually went through.
+    const validFiles = [];
+    const invalidMessages = [];
+    for (const file of files) {
+      const validation = validateImageFile(file);
+      if (validation.ok) validFiles.push(file);
+      else invalidMessages.push(`${file.name}: ${validation.error}`);
     }
+    if (invalidMessages.length > 0) {
+      setUploadError(
+        validFiles.length === 0
+          ? invalidMessages.join(" ")
+          : `${invalidMessages.length} of ${files.length} file(s) skipped — ${invalidMessages.join(" ")}`
+      );
+    }
+    if (validFiles.length === 0) { e.target.value = ""; return; }
+
+    setUploading(true);
+    setUploadProgress({ done: 0, total: validFiles.length });
+    for (let i = 0; i < validFiles.length; i++) {
+      const file = validFiles[i];
+      const fileName = `${businessId}/${Date.now()}-${i}-${file.name}`;
+      const { error: uploadErr } = await supabase.storage.from("business-photos").upload(fileName, file);
+      if (!uploadErr) {
+        await supabase.from("photos").insert([{ business_id: businessId, file_path: fileName, file_name: file.name, caption, status: "pending", posted_platforms: [] }]);
+      }
+      setUploadProgress({ done: i + 1, total: validFiles.length });
+    }
+    setCaption("");
+    loadPhotos();
     setUploading(false);
+    setUploadProgress(null);
+    e.target.value = "";
   };
 
   const togglePlatform = async (photo, platform) => {
@@ -4098,10 +4124,17 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
             <Label>Caption (optional)</Label>
             <input style={inputStyle} value={caption} onChange={e => setCaption(e.target.value)} placeholder="e.g. New menu item, team photo, storefront..." />
           </div>
-          <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" style={{ display: "none" }} />
-          <button onClick={() => { setUploadError(""); fileInputRef.current?.click(); }} disabled={uploading} style={{ ...btnStyle, width: "100%" }}>{uploading ? "Uploading…" : "📸 Upload Photo"}</button>
+          <input type="file" ref={fileInputRef} onChange={handleUpload} accept="image/*" multiple style={{ display: "none" }} />
+          <button onClick={() => { setUploadError(""); fileInputRef.current?.click(); }} disabled={uploading} style={{ ...btnStyle, width: "100%" }}>
+            {uploading ? (uploadProgress ? `Uploading ${uploadProgress.done}/${uploadProgress.total}…` : "Uploading…") : "📸 Upload Photos"}
+          </button>
+          {uploading && uploadProgress && (
+            <div style={{ background: C.border, borderRadius: 99, height: 6, overflow: "hidden", marginTop: 10 }}>
+              <div style={{ height: "100%", width: `${(uploadProgress.done / uploadProgress.total) * 100}%`, background: `linear-gradient(90deg, ${C.gold}, #0d3d8a)`, borderRadius: 99, transition: "width 0.2s" }} />
+            </div>
+          )}
           {uploadError && <p style={{ color: "#ef4444", fontFamily: font.body, fontSize: 13, marginTop: 8 }}>{uploadError}</p>}
-          <p style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, textAlign: "center", marginTop: 8 }}>Images only · Max 10 MB · JPG, PNG, WebP, GIF, AVIF</p>
+          <p style={{ fontFamily: font.body, fontSize: 11, color: C.textMuted, textAlign: "center", marginTop: 8 }}>Select multiple images at once · Max 10 MB each · JPG, PNG, WebP, GIF, AVIF</p>
           <p style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, textAlign: "center", marginTop: 4 }}>Photos will be reviewed and posted to your listings by your account manager.</p>
         </div>
       )}
