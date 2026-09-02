@@ -1814,6 +1814,9 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
   const [addingEmp, setAddingEmp] = useState(false);
   const [newEmp, setNewEmp] = useState({ name: "", email: "", password: "" });
   const [features, setFeatures] = useState(business.features || { send: true, analytics: false, history: false, google_posts: false, social: false });
+  const [seoKeywords, setSeoKeywords] = useState(business.seo_keywords || []);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [savingKeyword, setSavingKeyword] = useState(false);
 
   useEffect(() => {
     supabase.from("employees").select("*").eq("business_id", business.id).then(({ data }) => setEmployees(data || []));
@@ -1839,6 +1842,23 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
     const updated = { ...features, [key]: !features[key] };
     setFeatures(updated);
     await supabase.from("businesses").update({ features: updated }).eq("id", business.id);
+  };
+
+  const addKeyword = async () => {
+    const kw = newKeyword.trim().toLowerCase();
+    if (!kw || seoKeywords.includes(kw)) { setNewKeyword(""); return; }
+    setSavingKeyword(true);
+    const updated = [...seoKeywords, kw];
+    await supabase.from("businesses").update({ seo_keywords: updated }).eq("id", business.id);
+    setSeoKeywords(updated);
+    setNewKeyword("");
+    setSavingKeyword(false);
+  };
+
+  const removeKeyword = async (kw) => {
+    const updated = seoKeywords.filter(k => k !== kw);
+    setSeoKeywords(updated);
+    await supabase.from("businesses").update({ seo_keywords: updated }).eq("id", business.id);
   };
 
   const handleLogoUpload = async (e) => {
@@ -1928,6 +1948,28 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
         </select>
       </div>
       <div style={{ marginBottom: 20 }}><Label>Short description (used for AI captions)</Label><textarea rows={2} value={form.short_description} onChange={set("short_description")} style={{ ...inputStyle, resize: "vertical" }} /></div>
+
+      <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>SEO Keywords</div>
+      <p style={{ fontFamily: font.body, fontSize: 12, color: C.textSub, marginBottom: 10 }}>Used to rename photo files for Google image SEO (e.g. "tree removal", "stump grinding"). Pick which ones apply when tagging each photo.</p>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+        {seoKeywords.length === 0 && <span style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted }}>No keywords added yet.</span>}
+        {seoKeywords.map(kw => (
+          <span key={kw} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 6px 4px 12px", borderRadius: 99, background: "#EEF3FA", border: `1px solid ${C.border}`, fontFamily: font.body, fontSize: 13, color: C.text }}>
+            {kw}
+            <button onClick={() => removeKeyword(kw)} style={{ background: "none", border: "none", color: "#e74c3c", cursor: "pointer", fontSize: 15, lineHeight: 1, padding: "0 4px" }}>×</button>
+          </span>
+        ))}
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
+        <input
+          value={newKeyword}
+          onChange={e => setNewKeyword(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addKeyword())}
+          placeholder="e.g. tree removal"
+          style={{ ...inputStyle, flex: 1 }}
+        />
+        <button onClick={addKeyword} disabled={savingKeyword || !newKeyword.trim()} style={{ ...ghostBtnStyle, fontSize: 14, padding: "10px 18px" }}>+ Add</button>
+      </div>
 
       <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Message template</div>
       <textarea rows={3} value={form.message_template} onChange={set("message_template")} style={{ ...inputStyle, resize: "vertical", marginBottom: 4 }} />
@@ -3985,6 +4027,11 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
   const PHOTOS_PAGE_SIZE = 5;
   const [visibleCount, setVisibleCount] = useState(PHOTOS_PAGE_SIZE);
 
+  // SEO keyword filename tagging — dropdown state
+  const [keywordDropdownFor, setKeywordDropdownFor] = useState(null); // photo id currently open
+  const [draftKeywords, setDraftKeywords] = useState([]); // checkboxes selected in the open dropdown
+  const [renamingPhotoId, setRenamingPhotoId] = useState(null);
+
   const PHOTO_PLATFORMS = [
     { id: "google", label: "GP", fullLabel: "Google Posts", color: "#4A90D9" },
     { id: "google_campaign", label: "GI", fullLabel: "Google Images", color: "#1A8C4E" },
@@ -4115,6 +4162,43 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
     }
   };
 
+  const slugify = (s) => (s || "").toString().toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/(^-+|-+$)/g, "");
+
+  // Actually renames the file in Supabase Storage (not just a display label) —
+  // both Download and native drag-out use the file's real storage path/URL to
+  // decide the filename, so a cosmetic rename in the UI alone wouldn't affect
+  // either of those. A short random suffix keeps paths unique even when two
+  // photos share the exact same keyword selection.
+  const applyKeywordsToPhoto = async (photo, keywords) => {
+    if (keywords.length === 0) return;
+    setRenamingPhotoId(photo.id);
+    const biz = business || {};
+    const ext = (photo.file_name.split(".").pop() || "jpg").toLowerCase();
+    const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    const uniqueSuffix = Math.random().toString(36).slice(2, 6);
+    const parts = [
+      ...keywords.map(slugify),
+      slugify(biz.name || businessName || "photo"),
+      biz.city ? slugify(biz.city) : null,
+      datePart,
+      uniqueSuffix,
+    ].filter(Boolean);
+    const newFileName = `${parts.join("-")}.${ext}`;
+    const newFilePath = `${businessId}/${newFileName}`;
+
+    const { error: moveErr } = await supabase.storage.from("business-photos").move(photo.file_path, newFilePath);
+    if (moveErr) {
+      alert("Couldn't rename the file: " + moveErr.message);
+      setRenamingPhotoId(null);
+      return;
+    }
+    await supabase.from("photos").update({ file_path: newFilePath, file_name: newFileName, applied_keywords: keywords }).eq("id", photo.id);
+    setKeywordDropdownFor(null);
+    setDraftKeywords([]);
+    setRenamingPhotoId(null);
+    loadPhotos();
+  };
+
   return (
     <div className="fade-up">
       <PageHeader title={isAdmin || isMarketing ? "Client Photos" : "Upload Photos"} sub={isAdmin || isMarketing ? `${photos.length} total photos` : "Upload photos for your Google Business listing"} />
@@ -4197,6 +4281,44 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
                       </div>
                       <button onClick={() => downloadPhoto(photo)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 6, border: `1px solid ${C.border}`, background: "transparent", color: C.textMuted, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>⬇ Download</button>
                     </div>
+
+                    {business && (
+                      <div style={{ marginBottom: 10 }}>
+                        {keywordDropdownFor === photo.id ? (
+                          <div style={{ border: `1px solid ${C.border}`, borderRadius: 10, padding: 12, background: C.surfaceHover }}>
+                            <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 700, letterSpacing: 1, textTransform: "uppercase", color: C.textSub, marginBottom: 8 }}>Pick keywords for this photo</div>
+                            {(business.seo_keywords || []).length === 0 ? (
+                              <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginBottom: 8 }}>No keywords set up for this client yet — add some in Settings above.</div>
+                            ) : (
+                              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 10 }}>
+                                {business.seo_keywords.map(kw => {
+                                  const checked = draftKeywords.includes(kw);
+                                  return (
+                                    <button key={kw} onClick={() => setDraftKeywords(d => checked ? d.filter(k => k !== kw) : [...d, kw])}
+                                      style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 10px", borderRadius: 99, border: `1.5px solid ${checked ? C.gold : C.border}`, background: checked ? "#EEF3FA" : "#fff", color: checked ? C.gold : C.textMuted, fontFamily: font.body, fontSize: 12, fontWeight: 600, cursor: "pointer" }}>
+                                      {checked ? "✓" : ""} {kw}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <button onClick={() => applyKeywordsToPhoto(photo, draftKeywords)} disabled={draftKeywords.length === 0 || renamingPhotoId === photo.id}
+                                style={{ ...btnStyle, fontSize: 12, padding: "7px 14px", opacity: draftKeywords.length === 0 ? 0.5 : 1 }}>
+                                {renamingPhotoId === photo.id ? "Renaming…" : "Apply & Rename File"}
+                              </button>
+                              <button onClick={() => { setKeywordDropdownFor(null); setDraftKeywords([]); }} style={{ ...ghostBtnStyle, fontSize: 12, padding: "7px 14px" }}>Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => { setKeywordDropdownFor(photo.id); setDraftKeywords(photo.applied_keywords || []); }}
+                            style={{ display: "flex", alignItems: "center", gap: 5, padding: "5px 12px", borderRadius: 8, border: `1px solid ${C.border}`, background: "#fff", color: C.textMuted, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                            🏷️ {photo.applied_keywords?.length > 0 ? `Tagged: ${photo.applied_keywords.join(", ")}` : "Tag with SEO keywords"}
+                          </button>
+                        )}
+                      </div>
+                    )}
+
                     <button onClick={() => togglePosted(photo)}
                       style={{
                         width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
