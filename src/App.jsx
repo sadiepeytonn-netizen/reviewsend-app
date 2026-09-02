@@ -3986,13 +3986,15 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
   const [visibleCount, setVisibleCount] = useState(PHOTOS_PAGE_SIZE);
 
   const PHOTO_PLATFORMS = [
-    { id: "google", label: "G", fullLabel: "Google", color: "#4A90D9" },
+    { id: "google", label: "GP", fullLabel: "Google Posts", color: "#4A90D9" },
+    { id: "google_campaign", label: "GI", fullLabel: "Google Images", color: "#1A8C4E" },
     { id: "facebook", label: "FB", fullLabel: "Facebook", color: "#1877F2" },
     { id: "instagram", label: "IG", fullLabel: "Instagram", color: "#E1306C" },
   ];
 
   const PLATFORM_PROMPTS = {
-    google: "Write an SEO-optimized Google Business photo description. Use keywords naturally, including the city and state. No hashtags. 2-3 sentences describing what's shown and what makes this business unique.",
+    google: "Write an SEO-optimized Google Business post caption. Use keywords naturally, including the city and state. No hashtags. 2-3 sentences describing what's shown and what makes this business unique.",
+    google_campaign: "Write an SEO-optimized Google Business photo description (for an uploaded image, not a post). Use keywords naturally including the city and state. No hashtags. 1-2 sentences describing what's shown.",
     instagram: "Write an engaging Instagram caption. Conversational, warm tone. 2-3 sentences then a line break followed by 15 relevant hashtags including the city and business type.",
     facebook: "Write a warm Facebook post caption. Community-focused tone, no hashtags. 2-3 sentences. End with a soft call to action.",
   };
@@ -4140,27 +4142,29 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
                 </div>
                 {(isAdmin || isMarketing) && (
                   <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8, marginBottom: 10 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 5, flexWrap: "wrap" }}>
-                        {PHOTO_PLATFORMS.map(p => {
-                          const isShared = postedPlatforms.includes(p.id);
-                          const isLocked = features && ((p.id === "google" && features.google_posts === false) || ((p.id === "instagram" || p.id === "facebook") && features.social === false));
-                          if (isLocked) return <button key={p.id} disabled style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99, border: `1.5px solid ${C.border}`, background: "transparent", color: C.textSub, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "not-allowed", opacity: 0.5 }}>🔒 {p.fullLabel}</button>;
-                          return (
-                            <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 2 }}>
-                              <button onClick={() => togglePlatform(photo, p.id)}
-                                title={`Mark as shared to ${p.fullLabel}`}
-                                style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99, border: `1.5px solid ${isShared ? p.color : C.border}`, background: isShared ? p.color + "15" : "transparent", color: isShared ? p.color : C.textMuted, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s" }}>
-                                <span style={{ width: 6, height: 6, borderRadius: "50%", background: isShared ? p.color : C.border, display: "inline-block" }} />
-                                {p.fullLabel}
-                              </button>
-                              <button onClick={() => openCaptionModal(photo, p.id)} title={`Generate an AI caption for ${p.fullLabel}`}
-                                style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, padding: "2px 4px", opacity: 0.55 }}>✨</button>
-                            </div>
-                          );
-                        })}
-                      </div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", marginBottom: 8 }}>
                       <button onClick={() => downloadPhoto(photo)} style={{ display: "flex", alignItems: "center", gap: 5, padding: "4px 12px", borderRadius: 6, border: `1px solid ${C.border}`, background: "transparent", color: C.textMuted, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>⬇ Download</button>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                      {PHOTO_PLATFORMS.map(p => {
+                        const isShared = postedPlatforms.includes(p.id);
+                        const isLocked = features && ((p.id === "google" && features.google_posts === false) || ((p.id === "instagram" || p.id === "facebook") && features.social === false));
+                        if (isLocked) return <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99, border: `1.5px solid ${C.border}`, color: C.textSub, fontFamily: font.body, fontSize: 11, fontWeight: 600, opacity: 0.5, width: "fit-content" }}>🔒 {p.fullLabel}</div>;
+                        return (
+                          <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <button onClick={() => togglePlatform(photo, p.id)}
+                              title={`Mark as shared to ${p.fullLabel}`}
+                              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99, border: `1.5px solid ${isShared ? p.color : C.border}`, background: isShared ? p.color + "15" : "transparent", color: isShared ? p.color : C.textMuted, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "pointer", transition: "all 0.15s", width: 130, flexShrink: 0 }}>
+                              <span style={{ width: 6, height: 6, borderRadius: "50%", background: isShared ? p.color : C.border, display: "inline-block", flexShrink: 0 }} />
+                              {p.fullLabel}
+                            </button>
+                            <button onClick={() => openCaptionModal(photo, p.id)}
+                              style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 10px", borderRadius: 99, border: `1.5px solid ${C.blue}55`, background: "#EFF6FF", color: C.blue, fontFamily: font.body, fontSize: 11, fontWeight: 600, cursor: "pointer" }}>
+                              ✨ AI Caption
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                     <button onClick={() => togglePosted(photo)}
                       style={{
