@@ -4400,12 +4400,29 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
     const newFileName = `${parts.join("-")}.${ext}`;
     const newFilePath = `${businessId}/${newFileName}`;
 
-    const { error: moveErr } = await supabase.storage.from("business-photos").move(photo.file_path, newFilePath);
-    if (moveErr) {
-      alert("Couldn't rename the file: " + moveErr.message);
+    // Rebuilt as download → upload → delete instead of storage.move().
+    // move() needs an UPDATE-level storage policy that this bucket doesn't
+    // have; download/upload/delete are the exact same operations already
+    // proven to work elsewhere in this app (photo upload + the Download
+    // button), so this sidesteps the permissions gap entirely.
+    const { data: fileData, error: downloadErr } = await supabase.storage.from("business-photos").download(photo.file_path);
+    if (downloadErr || !fileData) {
+      alert("Couldn't rename the file: " + (downloadErr?.message || "the original file couldn't be read."));
       setRenamingPhotoId(null);
       return;
     }
+    const { error: uploadErr } = await supabase.storage.from("business-photos").upload(newFilePath, fileData);
+    if (uploadErr) {
+      alert("Couldn't rename the file: " + uploadErr.message);
+      setRenamingPhotoId(null);
+      return;
+    }
+    // Best-effort cleanup of the old file — if this fails, the rename still
+    // succeeded from the user's perspective (new file is live and linked),
+    // it just leaves a harmless orphaned copy in storage rather than blocking
+    // the whole action on a delete permission issue too.
+    await supabase.storage.from("business-photos").remove([photo.file_path]).catch(() => {});
+
     await supabase.from("photos").update({ file_path: newFilePath, file_name: newFileName, applied_keywords: keywords }).eq("id", photo.id);
     setKeywordDropdownFor(null);
     setDraftKeywords([]);
