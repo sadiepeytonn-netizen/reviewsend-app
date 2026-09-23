@@ -860,8 +860,11 @@ function MarketingDashboard({ data, onSignOut }) {
   const [modalDefaultBiz, setModalDefaultBiz] = useState(null);
   const [editingAppt, setEditingAppt] = useState(null);
 
-  const [showAddClient, setShowAddClient] = useState(false);
-  const [newBiz, setNewBiz] = useState({ name: "", email: "", google_link: "", yelp_link: "" });
+  const [showAddClient, setShowAddClient] = useState(() => sessionStorage.getItem(RS_NS + "showAddClient") === "true");
+  const [newBiz, setNewBiz] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem(RS_NS + "newBizDraft")) || { name: "", email: "", google_link: "", yelp_link: "" }; }
+    catch { return { name: "", email: "", google_link: "", yelp_link: "" }; }
+  });
   const [savingClient, setSavingClient] = useState(false);
 
   const [showAddManager, setShowAddManager] = useState(false);
@@ -930,6 +933,8 @@ function MarketingDashboard({ data, onSignOut }) {
   }, [chatInput, selectedBusiness]);
   useEffect(() => { sessionStorage.setItem(RS_NS + "showAddTask", String(showAddTask)); }, [showAddTask]);
   useEffect(() => { sessionStorage.setItem(RS_NS + "newTaskDraft", JSON.stringify(newTask)); }, [newTask]);
+  useEffect(() => { sessionStorage.setItem(RS_NS + "showAddClient", String(showAddClient)); }, [showAddClient]);
+  useEffect(() => { sessionStorage.setItem(RS_NS + "newBizDraft", JSON.stringify(newBiz)); }, [newBiz]);
 
   // One-time restore of the selected client, once the business list has
   // actually loaded (can't select a business we haven't fetched yet). Uses
@@ -1998,31 +2003,31 @@ function ClientGooglePerformance({ business, googleData, performanceData, loadin
       <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginBottom: 18 }}>{googleData.location_name}</div>
 
       {/* Rating snapshot */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 22 }}>
         {[
           { label: "Rating", value: googleData.rating != null ? `${googleData.rating.toFixed(1)} ★` : "—" },
           { label: "Total Reviews", value: googleData.review_count ?? "—" },
           { label: "New This Month", value: googleData.new_this_month != null ? `+${googleData.new_this_month}` : "—" },
           { label: "Response Rate", value: googleData.response_rate != null ? `${googleData.response_rate}%` : "—" },
         ].map(s => (
-          <div key={s.label} style={{ textAlign: "center", padding: "12px 8px", background: C.bg, borderRadius: 10 }}>
-            <div style={{ fontFamily: font.display, fontSize: 22, fontWeight: 700, color: C.gold, lineHeight: 1 }}>{s.value}</div>
-            <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginTop: 4 }}>{s.label}</div>
+          <div key={s.label} style={{ textAlign: "center", padding: "18px 10px", background: C.bg, borderRadius: 10 }}>
+            <div style={{ fontFamily: font.display, fontSize: 28, fontWeight: 700, color: C.gold, lineHeight: 1 }}>{s.value}</div>
+            <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginTop: 6 }}>{s.label}</div>
           </div>
         ))}
       </div>
 
       {/* Metric chips — click one to change what the graph below shows */}
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 18 }}>
         {METRICS.map(m => {
           const active = activeMetric === m.id;
           return (
             <button key={m.id} onClick={() => setActiveMetric(m.id)}
-              style={{ textAlign: "left", padding: "8px 14px", borderRadius: 10, border: `1.5px solid ${active ? C.gold : C.border}`, background: active ? "#EEF3FA" : "#fff", cursor: "pointer", minWidth: 120 }}>
-              <div style={{ fontFamily: font.body, fontSize: 11, color: active ? C.gold : C.textMuted }}>{m.label}</div>
-              <div style={{ fontFamily: font.display, fontSize: 17, fontWeight: 700, color: C.text }}>{m.data?.total != null ? m.data.total.toLocaleString() : "—"}</div>
+              style={{ textAlign: "left", padding: "12px 16px", borderRadius: 10, border: `1.5px solid ${active ? C.gold : C.border}`, background: active ? "#EEF3FA" : "#fff", cursor: "pointer" }}>
+              <div style={{ fontFamily: font.body, fontSize: 12, color: active ? C.gold : C.textMuted, marginBottom: 4 }}>{m.label}</div>
+              <div style={{ fontFamily: font.display, fontSize: 21, fontWeight: 700, color: C.text }}>{m.data?.total != null ? m.data.total.toLocaleString() : "—"}</div>
               {m.data?.delta != null && (
-                <div style={{ fontFamily: font.body, fontSize: 11, fontWeight: 600, color: m.data.delta >= 0 ? "#1A8C4E" : "#C0392B" }}>{m.data.delta >= 0 ? "↑" : "↓"} {Math.abs(m.data.delta)}%</div>
+                <div style={{ fontFamily: font.body, fontSize: 12, fontWeight: 600, color: m.data.delta >= 0 ? "#1A8C4E" : "#C0392B", marginTop: 2 }}>{m.data.delta >= 0 ? "↑" : "↓"} {Math.abs(m.data.delta)}%</div>
               )}
             </button>
           );
@@ -2030,31 +2035,50 @@ function ClientGooglePerformance({ business, googleData, performanceData, loadin
       </div>
 
       {/* 6-month graph for whichever metric is active */}
-      <div style={{ background: C.bg, borderRadius: 10, padding: 16 }}>
-        <div style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, marginBottom: 10 }}>{activeLabel} — last 6 months</div>
+      <div style={{ background: C.bg, borderRadius: 10, padding: "18px 20px" }}>
+        <div style={{ fontFamily: font.body, fontSize: 13, color: C.textMuted, marginBottom: 14 }}>{activeLabel} — last 6 months</div>
         {activeTrend.length > 0 ? (
           (() => {
-            const w = 600, h = 160;
+            const w = 640, h = 180;
+            const padX = 4; // svg-space padding; real edge safety comes from the HTML dot/label overlay below
+            const padTop = 16, padBottom = 8;
+            const plotW = w - padX * 2;
+            const plotH = h - padTop - padBottom;
             const maxV = Math.max(...activeTrend.map(p => p.value), 1);
-            const stepX = activeTrend.length > 1 ? w / (activeTrend.length - 1) : 0;
+            const stepX = activeTrend.length > 1 ? plotW / (activeTrend.length - 1) : 0;
             const points = activeTrend.map((p, i) => ({
-              x: activeTrend.length > 1 ? i * stepX : w / 2,
-              y: h - (p.value / maxV) * (h - 20),
+              x: activeTrend.length > 1 ? padX + i * stepX : w / 2,
+              y: padTop + plotH - (p.value / maxV) * plotH,
               ...p,
             }));
             const linePoints = points.map(p => `${p.x},${p.y}`).join(" ");
-            const areaPoints = `${points[0].x},${h} ${linePoints} ${points[points.length - 1].x},${h}`;
+            const baseline = padTop + plotH;
+            const areaPoints = `${points[0].x},${baseline} ${linePoints} ${points[points.length - 1].x},${baseline}`;
             return (
-              <svg viewBox={`0 0 ${w} ${h + 24}`} style={{ width: "100%", height: 180 }} preserveAspectRatio="none">
-                <polygon points={areaPoints} fill={C.gold} opacity="0.12" />
-                <polyline points={linePoints} fill="none" stroke={C.gold} strokeWidth="2.5" />
-                {points.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r="4" fill={C.gold} />)}
+              <div style={{ position: "relative", height: 210 }}>
+                {/* Smooth line + fill — safe to stretch non-uniformly, a curve doesn't visibly distort */}
+                <svg viewBox={`0 0 ${w} ${h}`} style={{ width: "100%", height: 180, display: "block" }} preserveAspectRatio="none">
+                  <polygon points={areaPoints} fill={C.gold} opacity="0.12" />
+                  <polyline points={linePoints} fill="none" stroke={C.gold} strokeWidth="2.5" />
+                </svg>
+                {/* Dots + month labels as real HTML elements, positioned by percentage — stays perfectly round/unstretched at any card width */}
                 {points.map((p, i) => (
-                  <text key={i} x={p.x} y={h + 18} fontSize="11" fill={C.textMuted} textAnchor="middle">
-                    {new Date(p.month + "-01T00:00:00").toLocaleDateString("en-US", { month: "short" })}
-                  </text>
+                  <div key={i} style={{
+                    position: "absolute", left: `${(p.x / w) * 100}%`, top: `${(p.y / h) * (180 / 210) * 100}%`,
+                    width: 9, height: 9, borderRadius: "50%", background: C.gold,
+                    transform: "translate(-50%, -50%)", boxShadow: "0 0 0 2px #fff",
+                  }} />
                 ))}
-              </svg>
+                {points.map((p, i) => (
+                  <div key={"label" + i} style={{
+                    position: "absolute", left: `${(p.x / w) * 100}%`, top: 185,
+                    transform: i === 0 ? "translateX(0)" : i === points.length - 1 ? "translateX(-100%)" : "translateX(-50%)",
+                    fontFamily: font.body, fontSize: 12, color: C.textMuted, whiteSpace: "nowrap",
+                  }}>
+                    {new Date(p.month + "-01T00:00:00").toLocaleDateString("en-US", { month: "short" })}
+                  </div>
+                ))}
+              </div>
             );
           })()
         ) : (
