@@ -2099,6 +2099,9 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [sendingPasswordEmail, setSendingPasswordEmail] = useState(false);
+  const [passwordEmailSent, setPasswordEmailSent] = useState(false);
+  const [passwordEmailError, setPasswordEmailError] = useState("");
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoUrl, setLogoUrl] = useState(business.logo_url || null);
   const logoInputRef = useRef(null);
@@ -2223,6 +2226,20 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
     onSaved && onSaved({ ...business, google_access_token: null, google_account_id: null, google_location_id: null });
   };
 
+  const resendPasswordEmail = async () => {
+    setSendingPasswordEmail(true);
+    setPasswordEmailError("");
+    setPasswordEmailSent(false);
+    const ok = await sendInviteEmail(business.email, business.name);
+    if (ok) {
+      setPasswordEmailSent(true);
+      setTimeout(() => setPasswordEmailSent(false), 4000);
+    } else {
+      setPasswordEmailError("Couldn't send the email — try again in a moment.");
+    }
+    setSendingPasswordEmail(false);
+  };
+
   const featureDefs = [["send", "Review requests"], ["google_posts", "Google posts"], ["social", "Instagram & Facebook"], ["analytics", "Analytics"], ["history", "History"]];
   const businessTypes = ["Restaurant / Food & Beverage", "Salon / Spa / Beauty", "Auto Shop / Dealership", "Healthcare / Medical", "Retail", "Marketing Agency", "Fitness / Gym", "Legal / Law Firm", "Real Estate", "Other"];
 
@@ -2293,6 +2310,19 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
       <div style={{ marginBottom: 10 }}><Label>Google Business Profile URL</Label><input value={form.social_google} onChange={set("social_google")} style={inputStyle} /></div>
       <div style={{ marginBottom: 10 }}><Label>Instagram</Label><input value={form.social_instagram} onChange={set("social_instagram")} style={inputStyle} /></div>
       <div style={{ marginBottom: 20 }}><Label>Facebook</Label><input value={form.social_facebook} onChange={set("social_facebook")} style={inputStyle} /></div>
+
+      <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Account access</div>
+      <div style={{ marginBottom: 20 }}>
+        <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, lineHeight: 1.5, marginBottom: 10 }}>
+          Sends {business.name || "this client"} a link to set or reset their ReviewSend login password — same email as onboarding, works anytime, not just for new accounts. Only affects the business owner's own login, not employee logins.
+        </p>
+        <button onClick={resendPasswordEmail} disabled={sendingPasswordEmail}
+          style={{ ...ghostBtnStyle, fontSize: 13, padding: "9px 16px", opacity: sendingPasswordEmail ? 0.6 : 1 }}>
+          {sendingPasswordEmail ? "Sending…" : "Send password setup email"}
+        </button>
+        {passwordEmailSent && <p style={{ fontFamily: font.body, fontSize: 12, color: C.green, marginTop: 8 }}>✓ Email sent to {business.email}</p>}
+        {passwordEmailError && <p style={{ fontFamily: font.body, fontSize: 12, color: "#e74c3c", marginTop: 8 }}>{passwordEmailError}</p>}
+      </div>
 
       <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Google Business Profile connection</div>
       <div style={{ marginBottom: 20 }}>
