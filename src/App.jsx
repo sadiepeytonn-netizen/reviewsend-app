@@ -191,10 +191,9 @@ function ForgotPasswordModal({ onClose }) {
     if (!email.trim()) return;
     setStatus("loading");
     setErrorMsg("");
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), {
-      redirectTo: window.location.origin,
-    });
-    if (error) { setStatus("error"); setErrorMsg("Something went wrong. Please try again."); }
+    // Sent by our own email service; Supabase's built-in email rarely reaches clients.
+    const result = await api("/forgot-password", { email: email.trim().toLowerCase() });
+    if (!result.success) { setStatus("error"); setErrorMsg(result.message || "Something went wrong. Please try again."); }
     else setStatus("sent");
   };
 
@@ -624,7 +623,6 @@ function SuperAdminDashboard({ onSignOut }) {
       follow_up_template: "Hi {name}! Just a reminder — we'd love your review: {link} ⭐",
     }]);
     if (!error) {
-      await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: "https://app.reviewsend.io" });
       await sendInviteEmail(cleanEmail, newBusiness.name);
       setShowAddBusiness(false);
       setNewBusiness({ name: "", email: "", password: "", google_link: "", yelp_link: "", marketing_company_id: "" });
@@ -1141,7 +1139,6 @@ function MarketingDashboard({ data, onSignOut }) {
       follow_up_template: "Hi {name}! Just a reminder — we'd love your review: {link} ⭐",
     }]);
     if (!error) {
-      await supabase.auth.resetPasswordForEmail(cleanEmail, { redirectTo: "https://app.reviewsend.io" });
       await sendInviteEmail(cleanEmail, newBiz.name);
       setShowAddClient(false);
       setNewBiz({ name: "", email: "", google_link: "", yelp_link: "" });
@@ -2192,6 +2189,19 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
     onSaved && onSaved({ ...business, google_connected: false, google_account_id: null, google_location_id: null });
   };
 
+  const [newClientPassword, setNewClientPassword] = useState("");
+  const [settingPassword, setSettingPassword] = useState(false);
+  const [setPasswordMsg, setSetPasswordMsg] = useState({ ok: false, text: "" });
+  const setClientPassword = async () => {
+    if (newClientPassword.length < 8) { setSetPasswordMsg({ ok: false, text: "Use at least 8 characters." }); return; }
+    if (!window.confirm(`Set a new password for ${business.email}? Their old password will stop working.`)) return;
+    setSettingPassword(true);
+    const result = await api("/set-password", { business_id: business.id, password: newClientPassword });
+    setSettingPassword(false);
+    if (result.success) { setSetPasswordMsg({ ok: true, text: `✓ New password set for ${result.email}. Let them know, and suggest they change it later.` }); setNewClientPassword(""); }
+    else setSetPasswordMsg({ ok: false, text: result.error || "Couldn't set the password." });
+  };
+
   const resendPasswordEmail = async () => {
     setSendingPasswordEmail(true);
     setPasswordEmailError("");
@@ -2287,6 +2297,18 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
           {sendingPasswordEmail ? "Sending…" : "Send password setup email"}
         </button>
         {passwordEmailSent && <p style={{ fontFamily: font.body, fontSize: 12, color: C.green, marginTop: 8 }}>✓ Email sent to {business.email}</p>}
+        <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, lineHeight: 1.5, margin: "16px 0 8px" }}>
+          Or set a new password for them yourself (at least 8 characters), then tell them what it is.
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <input type="text" autoComplete="off" value={newClientPassword} onChange={e => { setNewClientPassword(e.target.value); setSetPasswordMsg({ ok: false, text: "" }); }}
+            placeholder="New password" style={{ ...inputStyle, flex: 1 }} />
+          <button onClick={setClientPassword} disabled={settingPassword || !newClientPassword}
+            style={{ ...ghostBtnStyle, fontSize: 13, padding: "9px 16px", opacity: settingPassword ? 0.6 : 1 }}>
+            {settingPassword ? "Saving…" : "Set password"}
+          </button>
+        </div>
+        {setPasswordMsg.text && <p style={{ fontFamily: font.body, fontSize: 12, color: setPasswordMsg.ok ? C.green : "#e74c3c", marginTop: 8 }}>{setPasswordMsg.text}</p>}
         {passwordEmailError && <p style={{ fontFamily: font.body, fontSize: 12, color: "#e74c3c", marginTop: 8 }}>{passwordEmailError}</p>}
       </div>
 
