@@ -16,9 +16,12 @@ Sentry.init({
 import { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
+// The database address and public key. The public key is designed to be visible
+// in the browser; what protects the data is the database's security rules
+// (supabase/migrations). Test copies set VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY.
 const supabase = createClient(
-  "https://ngfsttuxdfiyjauzlgtu.supabase.co",
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5nZnN0dHV4ZGZpeWphdXpsZ3R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5OTE5NDUsImV4cCI6MjA5MjU2Nzk0NX0.C9cpFEDNhHHlfsBvzkW_IrhV34CfYWKUpeM2SR2Mzys"
+  import.meta.env.VITE_SUPABASE_URL || "https://ngfsttuxdfiyjauzlgtu.supabase.co",
+  import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5nZnN0dHV4ZGZpeWphdXpsZ3R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY5OTE5NDUsImV4cCI6MjA5MjU2Nzk0NX0.C9cpFEDNhHHlfsBvzkW_IrhV34CfYWKUpeM2SR2Mzys"
 );
 
 const PLATFORMS = [
@@ -54,7 +57,7 @@ input:disabled, textarea:disabled { opacity: 0.5; cursor: not-allowed; }
 ::-webkit-scrollbar-thumb { background: #D6E2F0; border-radius: 10px; }
 `;
 
-const SERVER = "https://reviewsend-server-production.up.railway.app";
+const SERVER = import.meta.env.VITE_SERVER_URL || "https://reviewsend-server-production.up.railway.app";
 const SUPER_ADMIN_EMAIL = "bentonisaiah03@gmail.com";
 
 // ── SHARED GOOGLE OAUTH HELPERS ───────────────────────────────────────────────
@@ -64,7 +67,7 @@ const SUPER_ADMIN_EMAIL = "bentonisaiah03@gmail.com";
 // client's listing). The `state` param carries which business record this
 // connection is for, so the flow works no matter who's logged in.
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-const GOOGLE_REDIRECT_URI = "https://app.reviewsend.io";
+const GOOGLE_REDIRECT_URI = import.meta.env.VITE_APP_URL || "https://app.reviewsend.io";
 const GOOGLE_SCOPES = "https://www.googleapis.com/auth/business.manage";
 function buildGoogleConnectUrl(businessId) {
   const params = new URLSearchParams({
@@ -74,31 +77,31 @@ function buildGoogleConnectUrl(businessId) {
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
-// Used by the account manager / marketing company client workspace to pull a
-// client's live Google data without them being logged in as that client.
-// Mirrors the business-owner-side token refresh (getValidAccessToken inside
-// BusinessApp), just parameterized on an arbitrary business row instead of
-// the logged-in business owner's own `settings` state.
-async function getValidAccessTokenForBusiness(business) {
-  const expiry = business.google_token_expiry;
-  const bufferMs = 5 * 60 * 1000;
-  if (business.google_access_token && expiry && Date.now() < Number(expiry) - bufferMs) {
-    return business.google_access_token;
-  }
-  if (!business.google_refresh_token) return business.google_access_token;
-  try {
-    const res = await fetch(`${SERVER}/google/refresh-token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: business.google_refresh_token }) });
-    const result = await res.json();
-    if (result.success) {
-      const newExpiry = Date.now() + result.expires_in * 1000;
-      await supabase.from("businesses").update({ google_access_token: result.access_token, google_token_expiry: newExpiry }).eq("id", business.id);
-      return result.access_token;
-    }
-  } catch (err) {
-    // fall through — worst case the caller's subsequent fetch fails and surfaces its own error
-  }
-  return business.google_access_token;
+// ── SERVER CALLS ─────────────────────────────────────────────────────────────
+// Every call to our server carries the signed-in user's session, so the server
+// can check who is asking and which business they're allowed to touch.
+async function api(path, body) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(`${SERVER}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(session ? { Authorization: `Bearer ${session.access_token}` } : {}) },
+    body: JSON.stringify(body || {}),
+  });
+  try { return await res.json(); }
+  catch { return { success: false, error: `Server error (${res.status}). Please try again.` }; }
 }
+
+// Google Business Profile. The Google keys stay on the server; the app only
+// says which business it's asking about.
+const googleApi = {
+  connect: (businessId, code) => api("/google/connect", { business_id: businessId, code, redirect_uri: GOOGLE_REDIRECT_URI }),
+  locations: (businessId) => api("/google/locations", { business_id: businessId }),
+  selectLocation: (businessId, loc) => api("/google/select-location", { business_id: businessId, account_id: loc.account_id, location_id: loc.location_id }),
+  data: (businessId, loc) => api("/google/data", { business_id: businessId, ...(loc ? { account_id: loc.account_id, location_id: loc.location_id } : {}) }),
+  performance: (businessId) => api("/google/performance", { business_id: businessId }),
+  keywords: (businessId) => api("/google/searchkeywords", { business_id: businessId }),
+  disconnect: (businessId) => api("/google/disconnect", { business_id: businessId }),
+};
 
 // ── FEATURE 4: Photo upload validation ───────────────────────────────────────
 const ALLOWED_MIME_TYPES = new Set([
@@ -365,72 +368,44 @@ export default function App() {
     if (am) { setUserRole("accountmanager"); setAccountManagerData(am); setLoading(false); return; }
     const { data: biz } = await supabase.from("businesses").select("*").eq("email", email).single();
     if (biz) { setUserRole("business"); setBusinessData(biz); setLoading(false); return; }
+    const { data: emp } = await supabase.from("employees").select("id, business_id").eq("email", email.toLowerCase()).limit(1).maybeSingle();
+    if (emp) {
+      const { data: empBiz } = await supabase.from("businesses").select("*").eq("id", emp.business_id).single();
+      if (empBiz) { setUserRole("employee"); setBusinessData(empBiz); setLoading(false); return; }
+    }
     setUserRole("unknown");
     setLoading(false);
   };
 
-  // Feature 6: rate-limited login — hit server first, then Supabase
+  // Feature 6: rate-limited login — the server slows down repeated attempts,
+  // then everyone (owners, staff, clients, employees) signs in through Supabase.
   const handleLogin = async () => {
     setAuthError("");
     setAuthLoading(true);
     const cleanEmail = authEmail.trim().toLowerCase();
-
-    // Check if employee first (route to server-side rate-limited endpoint)
-    // We try the employee path via server which handles its own rate limiting
     try {
-      const empRes = await fetch(`${SERVER}/employee-login`, {
+      const checkRes = await fetch(`${SERVER}/business-login-check`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: cleanEmail, password: authPassword }),
+        body: JSON.stringify({ email: cleanEmail }),
       });
-      if (empRes.status === 429) {
-        const body = await empRes.json();
-        const mins = Math.ceil((body.retryAfter || 600) / 60);
+      if (checkRes.status === 429) {
+        const body = await checkRes.json();
+        const mins = Math.ceil((body.retryAfter || 900) / 60);
         setAuthError(`Too many attempts. Please wait ${mins} minute${mins !== 1 ? "s" : ""} and try again.`);
         setAuthLoading(false);
         return;
       }
-      const empData = await empRes.json();
-      if (empData.success && empData.employee) {
-        // Employee login successful
-        setUserRole("employee");
-        setBusinessData(empData.business);
-        setSession({ user: { email: cleanEmail } });
-        setLoading(false);
-        setAuthLoading(false);
-        return;
-      }
-      // If employee not found (401 with "Invalid credentials" could mean not an employee)
-      // Fall through to business owner login
-      if (empRes.status === 401 && !empData.success) {
-        // Could be a business owner — check rate limit for business owner login
-        const checkRes = await fetch(`${SERVER}/business-login-check`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: cleanEmail }),
-        });
-        if (checkRes.status === 429) {
-          const body = await checkRes.json();
-          const mins = Math.ceil((body.retryAfter || 900) / 60);
-          setAuthError(`Too many attempts. Please wait ${mins} minute${mins !== 1 ? "s" : ""} and try again.`);
-          setAuthLoading(false);
-          return;
-        }
-        // Rate check passed — attempt Supabase auth
-        const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: authPassword });
-        if (error) setAuthError(error.message);
-      }
     } catch (err) {
-      // Server unreachable — fall back to direct Supabase (graceful degradation)
-      console.warn("Rate limit server unreachable, falling back:", err.message);
-      const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: authPassword });
-      if (error) setAuthError(error.message);
+      // Server unreachable — still allow sign-in (Supabase has its own limits).
+      console.warn("Rate limit server unreachable, continuing:", err.message);
     }
+    const { error } = await supabase.auth.signInWithPassword({ email: cleanEmail, password: authPassword });
+    if (error) setAuthError(error.message);
     setAuthLoading(false);
   };
 
   const handleSignOut = async () => {
-    if (userRole === "employee") { setSession(null); setUserRole(null); setBusinessData(null); return; }
     await supabase.auth.signOut();
   };
 
@@ -577,33 +552,23 @@ function LoginScreen({ authEmail, setAuthEmail, authPassword, setAuthPassword, a
 // ── SERVER HELPERS ────────────────────────────────────────────────────────────
 async function deleteAuthUser(email) {
   try {
-    const response = await fetch(`${SERVER}/delete-user`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-    const data = await response.json();
+    const data = await api("/delete-user", { email });
+    if (!data.success) console.error("deleteAuthUser:", data.error);
     return data.success;
   } catch (err) { console.error("deleteAuthUser error:", err); return false; }
 }
 
 async function createAuthUser(email) {
   try {
-    const response = await fetch(`${SERVER}/create-user`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-    const data = await response.json();
+    const data = await api("/create-user", { email });
+    if (!data.success) console.error("createAuthUser:", data.error);
     return data.success;
   } catch (err) { console.error("createAuthUser error:", err); return false; }
 }
 
 async function sendInviteEmail(email, businessName) {
   try {
-    const response = await fetch(`${SERVER}/send-invite`, {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, businessName }),
-    });
-    const data = await response.json();
+    const data = await api("/send-invite", { email, businessName });
     if (!data.success) { console.error("Invite email error:", data.error); return false; }
     return true;
   } catch (err) { console.error("Invite email error:", err); return false; }
@@ -964,21 +929,16 @@ function MarketingDashboard({ data, onSignOut }) {
       setGoogleConnectLoading(true);
       setGoogleConnectError("");
       try {
-        const tokenRes = await fetch(`${SERVER}/google/token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, redirectUri: GOOGLE_REDIRECT_URI }) });
-        const tokens = await tokenRes.json();
-        if (!tokens.success) { setGoogleConnectError("Failed to connect Google: " + tokens.error); setGoogleConnectLoading(false); return; }
-
-        const expiry = Date.now() + (tokens.expires_in * 1000);
-        await supabase.from("businesses").update({ google_access_token: tokens.access_token, google_refresh_token: tokens.refresh_token || null, google_token_expiry: expiry }).eq("id", state);
-
-        const locRes = await fetch(`${SERVER}/google/locations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: tokens.access_token }) });
-        const locResult = await locRes.json();
+        // The server swaps Google's one-time code for keys, stores them privately,
+        // and returns the locations this Google login can see.
+        const locResult = await googleApi.connect(state, code);
+        if (!locResult.connected && !locResult.success) { setGoogleConnectError("Failed to connect Google: " + locResult.error); setGoogleConnectLoading(false); return; }
         if (!locResult.success) { console.log("[GOOGLE] locations debug:", locResult.debug); setGoogleConnectError((locResult.error || "Could not fetch Google locations.") + (locResult.debug ? " Accounts found: " + JSON.stringify(locResult.debug) : "")); setGoogleConnectLoading(false); return; }
 
         if (locResult.locations.length === 1) {
-          await finishGoogleConnect(state, tokens.access_token, locResult.locations[0]);
+          await finishGoogleConnect(state, locResult.locations[0]);
         } else {
-          setGoogleLocationChoices({ businessId: state, accessToken: tokens.access_token, locations: locResult.locations });
+          setGoogleLocationChoices({ businessId: state, locations: locResult.locations });
           setShowGoogleLocationPicker(true);
         }
       } catch (err) {
@@ -992,8 +952,9 @@ function MarketingDashboard({ data, onSignOut }) {
     window.location.href = buildGoogleConnectUrl(business.id);
   };
 
-  const finishGoogleConnect = async (businessId, accessToken, loc) => {
-    await supabase.from("businesses").update({ google_account_id: loc.account_id, google_location_id: loc.location_id }).eq("id", businessId);
+  const finishGoogleConnect = async (businessId, loc) => {
+    const saved = await googleApi.selectLocation(businessId, loc);
+    if (!saved.success) { setGoogleConnectError(saved.error || "Couldn't save that Google location."); return; }
     setShowGoogleLocationPicker(false);
     setGoogleLocationChoices(null);
     await loadAll();
@@ -1026,7 +987,7 @@ function MarketingDashboard({ data, onSignOut }) {
         const { data: allMsgs } = await supabase.from("messages").select("business_id, sent_at").in("business_id", ids);
         const totalSent = allMsgs?.length || 0;
         const sentThisMonth = allMsgs?.filter(m => new Date(m.sent_at) >= new Date(monthStart)).length || 0;
-        const googleConnectedCount = biz.filter(b => b.google_access_token && b.google_location_id).length;
+        const googleConnectedCount = biz.filter(b => b.google_connected && b.google_location_id).length;
         setOverviewStats({
           totalClients: biz.length,
           googleConnectedCount,
@@ -1114,7 +1075,7 @@ function MarketingDashboard({ data, onSignOut }) {
   };
 
   const loadClientGoogleData = async (biz) => {
-    if (!biz.google_access_token || !biz.google_location_id) {
+    if (!biz.google_connected || !biz.google_location_id) {
       setClientGoogleData(null);
       setClientPerformanceData(null);
       return;
@@ -1122,10 +1083,9 @@ function MarketingDashboard({ data, onSignOut }) {
     setClientGoogleLoading(true);
     setActiveMetric("search_views");
     try {
-      const accessToken = await getValidAccessTokenForBusiness(biz);
-      const dataRes = await fetch(`${SERVER}/google/data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, account_id: biz.google_account_id, location_id: biz.google_location_id, business_id: biz.id }) }).then(r => r.json());
+      const dataRes = await googleApi.data(biz.id);
       setClientGoogleData(dataRes.success ? dataRes : null);
-      const perfRes = await fetch(`${SERVER}/google/performance`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, location_id: biz.google_location_id }) }).then(r => r.json());
+      const perfRes = await googleApi.performance(biz.id);
       setClientPerformanceData(perfRes.success ? perfRes : null);
     } catch (err) {
       setClientGoogleData(null);
@@ -1268,7 +1228,7 @@ function MarketingDashboard({ data, onSignOut }) {
       {showGoogleLocationPicker && googleLocationChoices && (
         <LocationPickerModal
           locations={googleLocationChoices.locations}
-          onSelect={(loc) => finishGoogleConnect(googleLocationChoices.businessId, googleLocationChoices.accessToken, loc)}
+          onSelect={(loc) => finishGoogleConnect(googleLocationChoices.businessId, loc)}
           onClose={() => { setShowGoogleLocationPicker(false); setGoogleLocationChoices(null); }}
         />
       )}
@@ -1969,7 +1929,7 @@ function ClientFilesSection({ businessId, uploaderName }) {
 // directly into the existing per-client Analytics area — not a separate page,
 // not a tab, just an expansion of the section that's already there.
 function ClientGooglePerformance({ business, googleData, performanceData, loading, activeMetric, setActiveMetric }) {
-  if (!business?.google_access_token || !business?.google_location_id) {
+  if (!business?.google_connected || !business?.google_location_id) {
     return (
       <div style={{ ...card, padding: 20, marginBottom: 16, display: "flex", alignItems: "center", gap: 12 }}>
         <div style={{ width: 40, height: 40, borderRadius: 10, background: "#EEF3FA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, flexShrink: 0 }}>📊</div>
@@ -2114,7 +2074,7 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
   const [savingKeyword, setSavingKeyword] = useState(false);
 
   useEffect(() => {
-    supabase.from("employees").select("*").eq("business_id", business.id).then(({ data }) => setEmployees(data || []));
+    supabase.from("employees").select("id, name, email, business_id, created_at").eq("business_id", business.id).then(({ data }) => setEmployees(data || []));
   }, [business.id]);
 
   const set = (key) => (e) => setForm(f => ({ ...f, [key]: e.target.value }));
@@ -2204,26 +2164,29 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
     if (!newEmp.name || !newEmp.email || !newEmp.password) { alert("Fill in all fields."); return; }
     if (newEmp.password.length < 6) { alert("Password must be at least 6 characters."); return; }
     const cleanEmail = newEmp.email.trim().toLowerCase();
-    const { error } = await supabase.from("employees").insert([{ business_id: business.id, name: newEmp.name, email: cleanEmail, password: newEmp.password }]);
-    if (!error) {
-      const { data } = await supabase.from("employees").select("*").eq("business_id", business.id);
+    // The server creates the employee's login; the password is never stored in our tables.
+    const result = await api("/employees/create", { business_id: business.id, name: newEmp.name, email: cleanEmail, password: newEmp.password });
+    if (result.success) {
+      const { data } = await supabase.from("employees").select("id, name, email, business_id, created_at").eq("business_id", business.id);
       setEmployees(data || []);
       setNewEmp({ name: "", email: "", password: "" });
       setAddingEmp(false);
     } else {
-      alert(error.message.includes("duplicate") ? "An employee with that email already exists." : "Error: " + error.message);
+      alert(result.error || "Couldn't add that employee.");
     }
   };
 
   const removeEmployee = async (emp) => {
     if (!window.confirm(`Remove ${emp.name}?`)) return;
-    await supabase.from("employees").delete().eq("id", emp.id);
+    const result = await api("/employees/delete", { business_id: business.id, employee_id: emp.id });
+    if (!result.success) { alert(result.error || "Couldn't remove that employee."); return; }
     setEmployees(prev => prev.filter(e => e.id !== emp.id));
   };
 
   const disconnectGoogle = async () => {
-    await supabase.from("businesses").update({ google_access_token: null, google_refresh_token: null, google_token_expiry: null, google_account_id: null, google_location_id: null }).eq("id", business.id);
-    onSaved && onSaved({ ...business, google_access_token: null, google_account_id: null, google_location_id: null });
+    const result = await googleApi.disconnect(business.id);
+    if (!result.success) { alert(result.error || "Couldn't disconnect Google."); return; }
+    onSaved && onSaved({ ...business, google_connected: false, google_account_id: null, google_location_id: null });
   };
 
   const resendPasswordEmail = async () => {
@@ -2326,17 +2289,17 @@ function ClientSettingsFull({ business, onSaved, onDeleteClient, onConnectGoogle
 
       <div style={{ fontFamily: font.body, fontSize: 11, letterSpacing: 1.5, color: C.textSub, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Google Business Profile connection</div>
       <div style={{ marginBottom: 20 }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: business.google_access_token ? 0 : 10 }}>
-          <span style={{ fontFamily: font.body, fontSize: 13, color: business.google_access_token && business.google_location_id ? C.green : business.google_access_token ? "#d97706" : C.textMuted }}>
-            {business.google_access_token && business.google_location_id
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: business.google_connected ? 0 : 10 }}>
+          <span style={{ fontFamily: font.body, fontSize: 13, color: business.google_connected && business.google_location_id ? C.green : business.google_connected ? "#d97706" : C.textMuted }}>
+            {business.google_connected && business.google_location_id
               ? "Connected"
-              : business.google_access_token
+              : business.google_connected
               ? "Connected — no location chosen yet"
               : "Not connected"}
           </span>
-          {business.google_access_token && <button onClick={disconnectGoogle} style={{ ...ghostBtnStyle, fontSize: 12, padding: "6px 12px", color: "#e74c3c", borderColor: "#e74c3c88" }}>Disconnect</button>}
+          {business.google_connected && <button onClick={disconnectGoogle} style={{ ...ghostBtnStyle, fontSize: 12, padding: "6px 12px", color: "#e74c3c", borderColor: "#e74c3c88" }}>Disconnect</button>}
         </div>
-        {!business.google_access_token && onConnectGoogle && (
+        {!business.google_connected && onConnectGoogle && (
           <div>
             <p style={{ fontFamily: font.body, fontSize: 12, color: C.textMuted, lineHeight: 1.5, marginBottom: 10 }}>
               You can connect this yourself using your own Google login, as long as you've been added as a Manager (or Owner) on this client's Business Profile.
@@ -2505,21 +2468,16 @@ function AccountManagerDashboard({ data, onSignOut }) {
       setGoogleConnectLoading(true);
       setGoogleConnectError("");
       try {
-        const tokenRes = await fetch(`${SERVER}/google/token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, redirectUri: GOOGLE_REDIRECT_URI }) });
-        const tokens = await tokenRes.json();
-        if (!tokens.success) { setGoogleConnectError("Failed to connect Google: " + tokens.error); setGoogleConnectLoading(false); return; }
-
-        const expiry = Date.now() + (tokens.expires_in * 1000);
-        await supabase.from("businesses").update({ google_access_token: tokens.access_token, google_refresh_token: tokens.refresh_token || null, google_token_expiry: expiry }).eq("id", state);
-
-        const locRes = await fetch(`${SERVER}/google/locations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: tokens.access_token }) });
-        const locResult = await locRes.json();
+        // The server swaps Google's one-time code for keys, stores them privately,
+        // and returns the locations this Google login can see.
+        const locResult = await googleApi.connect(state, code);
+        if (!locResult.connected && !locResult.success) { setGoogleConnectError("Failed to connect Google: " + locResult.error); setGoogleConnectLoading(false); return; }
         if (!locResult.success) { console.log("[GOOGLE] locations debug:", locResult.debug); setGoogleConnectError((locResult.error || "Could not fetch Google locations.") + (locResult.debug ? " Accounts found: " + JSON.stringify(locResult.debug) : "")); setGoogleConnectLoading(false); return; }
 
         if (locResult.locations.length === 1) {
-          await finishGoogleConnect(state, tokens.access_token, locResult.locations[0]);
+          await finishGoogleConnect(state, locResult.locations[0]);
         } else {
-          setGoogleLocationChoices({ businessId: state, accessToken: tokens.access_token, locations: locResult.locations });
+          setGoogleLocationChoices({ businessId: state, locations: locResult.locations });
           setShowGoogleLocationPicker(true);
         }
       } catch (err) {
@@ -2533,8 +2491,9 @@ function AccountManagerDashboard({ data, onSignOut }) {
     window.location.href = buildGoogleConnectUrl(business.id);
   };
 
-  const finishGoogleConnect = async (businessId, accessToken, loc) => {
-    await supabase.from("businesses").update({ google_account_id: loc.account_id, google_location_id: loc.location_id }).eq("id", businessId);
+  const finishGoogleConnect = async (businessId, loc) => {
+    const saved = await googleApi.selectLocation(businessId, loc);
+    if (!saved.success) { setGoogleConnectError(saved.error || "Couldn't save that Google location."); return; }
     setShowGoogleLocationPicker(false);
     setGoogleLocationChoices(null);
     await loadAll();
@@ -2567,7 +2526,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
         const { data: allMsgs } = await supabase.from("messages").select("business_id, sent_at").in("business_id", ids);
         const totalSent = allMsgs?.length || 0;
         const sentThisMonth = allMsgs?.filter(m => new Date(m.sent_at) >= new Date(monthStart)).length || 0;
-        const googleConnectedCount = biz.filter(b => b.google_access_token && b.google_location_id).length;
+        const googleConnectedCount = biz.filter(b => b.google_connected && b.google_location_id).length;
         setOverviewStats({ totalClients: biz.length, googleConnectedCount, totalSent, sentThisMonth });
       } else {
         setOverviewStats({ totalClients: 0, googleConnectedCount: 0, totalSent: 0, sentThisMonth: 0 });
@@ -2646,7 +2605,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
   };
 
   const loadClientGoogleData = async (biz) => {
-    if (!biz.google_access_token || !biz.google_location_id) {
+    if (!biz.google_connected || !biz.google_location_id) {
       setClientGoogleData(null);
       setClientPerformanceData(null);
       return;
@@ -2654,10 +2613,9 @@ function AccountManagerDashboard({ data, onSignOut }) {
     setClientGoogleLoading(true);
     setActiveMetric("search_views");
     try {
-      const accessToken = await getValidAccessTokenForBusiness(biz);
-      const dataRes = await fetch(`${SERVER}/google/data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, account_id: biz.google_account_id, location_id: biz.google_location_id, business_id: biz.id }) }).then(r => r.json());
+      const dataRes = await googleApi.data(biz.id);
       setClientGoogleData(dataRes.success ? dataRes : null);
-      const perfRes = await fetch(`${SERVER}/google/performance`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, location_id: biz.google_location_id }) }).then(r => r.json());
+      const perfRes = await googleApi.performance(biz.id);
       setClientPerformanceData(perfRes.success ? perfRes : null);
     } catch (err) {
       setClientGoogleData(null);
@@ -2716,7 +2674,7 @@ function AccountManagerDashboard({ data, onSignOut }) {
       {showGoogleLocationPicker && googleLocationChoices && (
         <LocationPickerModal
           locations={googleLocationChoices.locations}
-          onSelect={(loc) => finishGoogleConnect(googleLocationChoices.businessId, googleLocationChoices.accessToken, loc)}
+          onSelect={(loc) => finishGoogleConnect(googleLocationChoices.businessId, loc)}
           onClose={() => { setShowGoogleLocationPicker(false); setGoogleLocationChoices(null); }}
         />
       )}
@@ -3098,7 +3056,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   const [unreadFromManager, setUnreadFromManager] = useState(0);
 
   // Google Business Profile state
-  const [googleConnected, setGoogleConnected] = useState(!!settings.google_access_token);
+  const [googleConnected, setGoogleConnected] = useState(!!settings.google_connected);
   const [googleData, setGoogleData] = useState(null);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [googleError, setGoogleError] = useState("");
@@ -3109,7 +3067,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   const [ratingHistory, setRatingHistory] = useState([]);
 
   const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
-  const REDIRECT_URI = "https://app.reviewsend.io";
+  const REDIRECT_URI = GOOGLE_REDIRECT_URI;
   const GOOGLE_SCOPES = "https://www.googleapis.com/auth/business.manage";
 
   const connectGoogle = () => {
@@ -3118,88 +3076,58 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   };
 
   const disconnectGoogle = async () => {
-    await supabase.from("businesses").update({ google_access_token: null, google_refresh_token: null, google_token_expiry: null, google_account_id: null, google_location_id: null }).eq("id", data.id);
+    const result = await googleApi.disconnect(data.id);
+    if (!result.success) { setGoogleError(result.error || "Couldn't disconnect Google."); return; }
     setGoogleConnected(false);
     setGoogleData(null);
-    setSettings(s => ({ ...s, google_access_token: null, google_account_id: null, google_location_id: null }));
+    setSettings(s => ({ ...s, google_connected: false, google_account_id: null, google_location_id: null }));
   };
 
-  // Step 1: fetch every location this Google login can see. If there's just
-  // one, connect it automatically. If there's more than one (e.g. a client
-  // managing multiple businesses), show a picker instead of guessing.
-  const fetchLocations = async (accessToken) => {
+  // If Google returns more than one location (e.g. a client managing
+  // multiple businesses), show a picker instead of guessing.
+  const handleLocations = async (result) => {
+    if (!result.success) {
+      setGoogleError(result.error || "Could not fetch your Google locations.");
+      setGoogleLoading(false);
+      return;
+    }
+    if (result.locations.length === 1) {
+      await connectLocation(result.locations[0]);
+    } else {
+      setLocationChoices(result.locations);
+      setShowLocationPicker(true);
+      setGoogleLoading(false);
+    }
+  };
+
+  const fetchLocations = async () => {
     setGoogleLoading(true);
     setGoogleError("");
     try {
-      const res = await fetch(`${SERVER}/google/locations`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken }) });
-      const result = await res.json();
-      if (!result.success) {
-        setGoogleError(result.error || "Could not fetch your Google locations.");
-        setGoogleLoading(false);
-        return;
-      }
-      if (result.locations.length === 1) {
-        await connectLocation(accessToken, result.locations[0]);
-      } else {
-        setLocationChoices(result.locations);
-        setShowLocationPicker(true);
-        setGoogleLoading(false);
-      }
+      await handleLocations(await googleApi.locations(data.id));
     } catch (err) {
       setGoogleError("Network error fetching your Google locations.");
       setGoogleLoading(false);
     }
   };
 
-  // Google access tokens only last ~1 hour. Rather than silently failing (and
-  // making it look like the connection "broke"), this checks the stored
-  // expiry and transparently refreshes via the stored refresh_token when
-  // needed — the user should never have to manually reconnect just because
-  // time passed.
-  const getValidAccessToken = async () => {
-    const expiry = settings.google_token_expiry;
-    const bufferMs = 5 * 60 * 1000; // refresh 5 min early to avoid edge-of-expiry failures
-    if (settings.google_access_token && expiry && Date.now() < Number(expiry) - bufferMs) {
-      return settings.google_access_token; // still good
-    }
-    if (!settings.google_refresh_token) {
-      return settings.google_access_token; // nothing to refresh with — caller will surface whatever error comes back
-    }
-    try {
-      const res = await fetch(`${SERVER}/google/refresh-token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refresh_token: settings.google_refresh_token }) });
-      const result = await res.json();
-      if (result.success) {
-        const newExpiry = Date.now() + result.expires_in * 1000;
-        await supabase.from("businesses").update({ google_access_token: result.access_token, google_token_expiry: newExpiry }).eq("id", data.id);
-        setSettings(s => ({ ...s, google_access_token: result.access_token, google_token_expiry: newExpiry }));
-        return result.access_token;
-      }
-      if (result.needs_reconnect) {
-        setGoogleError("Your Google connection needs to be reconnected — access was revoked or expired beyond renewal.");
-      }
-    } catch (err) {
-      // fall through to returning the stale token below — worst case the
-      // subsequent API call fails and surfaces its own error
-    }
-    return settings.google_access_token;
-  };
-
-  // Step 2: pull rating/reviews for the specific chosen location and save
-  // which one this business is linked to.
-  const connectLocation = async (accessToken, loc) => {
+  // Pull rating/reviews for the chosen location and save which one this
+  // business is linked to. The server keeps the Google connection fresh.
+  const connectLocation = async (loc, { save = true } = {}) => {
     setGoogleLoading(true);
     setShowLocationPicker(false);
     try {
-      const res = await fetch(`${SERVER}/google/data`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, account_id: loc.account_id, location_id: loc.location_id, business_id: data.id }) });
-      const result = await res.json();
+      const result = await googleApi.data(data.id, loc);
       if (result.success) {
         setGoogleData(result);
         setGoogleConnected(true);
-        await supabase.from("businesses").update({ google_account_id: loc.account_id, google_location_id: loc.location_id }).eq("id", data.id);
-        setSettings(s => ({ ...s, google_account_id: loc.account_id, google_location_id: loc.location_id }));
-        fetchGoogleExtras(accessToken, loc.location_id);
+        if (save) await googleApi.selectLocation(data.id, loc);
+        setSettings(s => ({ ...s, google_connected: true, google_account_id: loc.account_id, google_location_id: loc.location_id }));
+        fetchGoogleExtras();
       } else {
-        setGoogleError(result.error || "Could not connect that location.");
+        setGoogleError(result.needs_reconnect
+          ? "Your Google connection needs to be reconnected — access was revoked or expired beyond renewal."
+          : (result.error || "Could not connect that location."));
       }
     } catch (err) {
       setGoogleError("Network error connecting that location.");
@@ -3210,14 +3138,12 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   // Performance metrics (views/calls/directions/website clicks) and search
   // keywords aren't fatal if they fail — the core rating/reviews data still
   // works without them, so these run separately and fail silently on error.
-  const fetchGoogleExtras = async (accessToken, locationId) => {
-    fetch(`${SERVER}/google/performance`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, location_id: locationId }) })
-      .then(r => r.json())
+  const fetchGoogleExtras = () => {
+    googleApi.performance(data.id)
       .then(result => { if (result.success) setPerformanceData(result); })
       .catch(() => {});
 
-    fetch(`${SERVER}/google/searchkeywords`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ access_token: accessToken, location_id: locationId }) })
-      .then(r => r.json())
+    googleApi.keywords(data.id)
       .then(result => { if (result.success) setSearchKeywords(result.keywords); })
       .catch(() => {});
 
@@ -3240,31 +3166,22 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
       (async () => {
         setGoogleLoading(true);
         try {
-          const res = await fetch(`${SERVER}/google/token`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code, redirectUri: REDIRECT_URI }) });
-          const tokens = await res.json();
-          if (tokens.success) {
-            const expiry = Date.now() + (tokens.expires_in * 1000);
-            await supabase.from("businesses").update({ google_access_token: tokens.access_token, google_refresh_token: tokens.refresh_token || null, google_token_expiry: expiry }).eq("id", data.id);
-            setSettings(s => ({ ...s, google_access_token: tokens.access_token }));
-            window.history.replaceState({}, "", window.location.pathname);
-            await fetchLocations(tokens.access_token);
-          } else { setGoogleError("Failed to connect Google: " + tokens.error); window.history.replaceState({}, "", window.location.pathname); }
+          // The server swaps Google's one-time code for keys and stores them privately.
+          const result = await googleApi.connect(data.id, code);
+          window.history.replaceState({}, "", window.location.pathname);
+          if (result.connected) {
+            setSettings(s => ({ ...s, google_connected: true }));
+            await handleLocations(result);
+          } else { setGoogleError("Failed to connect Google: " + result.error); }
         } catch (err) { setGoogleError("Error connecting Google account."); }
         setGoogleLoading(false);
       })();
-    } else if (settings.google_access_token && settings.google_location_id) {
-      // Already connected and a location was previously chosen — refresh the
-      // token if it's stale, then go straight there
-      (async () => {
-        const freshToken = await getValidAccessToken();
-        connectLocation(freshToken, { account_id: settings.google_account_id, location_id: settings.google_location_id });
-      })();
-    } else if (settings.google_access_token) {
-      // Connected but no location saved yet (e.g. an older connection) — refresh if needed, then show picker
-      (async () => {
-        const freshToken = await getValidAccessToken();
-        fetchLocations(freshToken);
-      })();
+    } else if (settings.google_connected && settings.google_location_id) {
+      // Already connected and a location was previously chosen — go straight there
+      connectLocation({ account_id: settings.google_account_id, location_id: settings.google_location_id }, { save: false });
+    } else if (settings.google_connected) {
+      // Connected but no location saved yet (e.g. an older connection) — show picker
+      fetchLocations();
     }
   }, []);
 
@@ -3293,7 +3210,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
   };
 
   useEffect(() => {
-    supabase.from("employees").select("*").eq("business_id", data.id).then(({ data: emps }) => setEmployees(emps || []));
+    if (!isEmployee) supabase.from("employees").select("id, name, email, business_id, created_at").eq("business_id", data.id).then(({ data: emps }) => setEmployees(emps || []));
     loadMessages();
     loadPendingPhotos();
     loadChat();
@@ -3340,11 +3257,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
     const message = buildMessagePreview().replace("[review link]", link || "");
     try {
       const endpoint = settings.logo_url ? "/send-mms" : "/send-sms";
-      const body = settings.logo_url
-        ? JSON.stringify({ to: formatPhone(phone), message, mediaUrl: settings.logo_url })
-        : JSON.stringify({ to: formatPhone(phone), message });
-      const response = await fetch(`${SERVER}${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
-      const result = await response.json();
+      const result = await api(endpoint, { business_id: data.id, to: formatPhone(phone), message });
       if (result.success) {
         await supabase.from("messages").insert([{ business_id: data.id, customer_name: customerName, customer_phone: formatPhone(phone), platform: platform === "google" ? "Google" : "Yelp" }]);
         setShowSendConfirm(false);
@@ -3394,23 +3307,24 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
     if (newEmployee.password.length < 6) { alert("Password must be at least 6 characters."); return; }
     setEmployeeSaving(true);
     const cleanEmail = newEmployee.email.trim().toLowerCase();
-    const { error } = await supabase.from("employees").insert([{ business_id: data.id, name: newEmployee.name, email: cleanEmail, password: newEmployee.password }]);
-    if (!error) {
-      const { data: emps } = await supabase.from("employees").select("*").eq("business_id", data.id);
+    // The server creates the employee's login; the password is never stored in our tables.
+    const result = await api("/employees/create", { business_id: data.id, name: newEmployee.name, email: cleanEmail, password: newEmployee.password });
+    if (result.success) {
+      const { data: emps } = await supabase.from("employees").select("id, name, email, business_id, created_at").eq("business_id", data.id);
       setEmployees(emps || []);
       setNewEmployee({ name: "", email: "", password: "" });
       setAddingEmployee(false);
-      alert("Employee added! Email: " + cleanEmail + "  |  Password: " + newEmployee.password);
+      alert("Employee added! They can sign in with " + cleanEmail + " and the password you chose.");
     } else {
-      if (error.message.includes("duplicate key") || error.message.includes("unique constraint")) alert("An employee with that email already exists.");
-      else alert("Error adding employee: " + error.message);
+      alert(result.error || "Couldn't add that employee.");
     }
     setEmployeeSaving(false);
   };
 
   const removeEmployee = async (emp) => {
     if (!window.confirm("Remove " + emp.name + " from your team? They will no longer be able to log in.")) return;
-    await supabase.from("employees").delete().eq("id", emp.id);
+    const result = await api("/employees/delete", { business_id: data.id, employee_id: emp.id });
+    if (!result.success) { alert(result.error || "Couldn't remove that employee."); return; }
     setEmployees(prev => prev.filter(e => e.id !== emp.id));
   };
 
@@ -3448,7 +3362,7 @@ function BusinessApp({ data, onSignOut, isEmployee = false }) {
       {showLocationPicker && locationChoices && (
         <LocationPickerModal
           locations={locationChoices}
-          onSelect={(loc) => connectLocation(settings.google_access_token, loc)}
+          onSelect={(loc) => connectLocation(loc)}
           onClose={() => setShowLocationPicker(false)}
         />
       )}
@@ -4175,10 +4089,8 @@ function BulkSendTab({ business, onComplete }) {
       const contact = cappedContacts[i];
       const message = (business.message_template || "Hi {name}! Thanks for visiting {business}. Leave us a review here: {link} 🙏").replace("{name}", contact.name).replace("{business}", business.name).replace("{link}", link);
       const endpoint = business.logo_url ? "/send-mms" : "/send-sms";
-      const bodyData = business.logo_url ? JSON.stringify({ to: "+1" + contact.phone, message, mediaUrl: business.logo_url }) : JSON.stringify({ to: "+1" + contact.phone, message });
       try {
-        const response = await fetch(`${SERVER}${endpoint}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: bodyData });
-        const result = await response.json();
+        const result = await api(endpoint, { business_id: business.id, to: "+1" + contact.phone, message });
         if (result.success) {
           await supabase.from("messages").insert([{ business_id: business.id, customer_name: contact.name, customer_phone: "+1" + contact.phone, platform: platform === "google" ? "Google" : "Yelp" }]);
           sent++;
@@ -4530,16 +4442,9 @@ function PhotosTab({ businessId, businessName, business = null, isAdmin = false,
     const context = [biz.name ? `Business: ${biz.name}` : `Business: ${businessName}`, biz.city && biz.state ? `Location: ${biz.city}, ${biz.state}` : "", biz.business_type ? `Type: ${biz.business_type}` : "", biz.short_description ? `Description: ${biz.short_description}` : "", photo.caption ? `Photo note: ${photo.caption}` : ""].filter(Boolean).join("\n");
     const prompt = `${PLATFORM_PROMPTS[platformId] || "Write a professional social media caption."}\n\nBusiness info:\n${context}`;
     try {
-      const apiKey = import.meta.env.VITE_ANTHROPIC_API_KEY;
-      if (!apiKey) { setGeneratedCaption("API key not found. Make sure VITE_ANTHROPIC_API_KEY is set."); setGenerating(false); return; }
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model: "claude-sonnet-4-5", max_tokens: 500, messages: [{ role: "user", content: prompt }] }),
-      });
-      const data = await response.json();
-      if (!response.ok) { setGeneratedCaption("API error " + response.status + ": " + (data.error?.message || "Unknown error")); setGenerating(false); return; }
-      setGeneratedCaption(data.content?.[0]?.text || "Could not generate caption.");
+      const result = await api("/ai/caption", { business_id: photo.business_id || businessId, prompt });
+      if (!result.success) { setGeneratedCaption(result.error || "Could not generate caption."); setGenerating(false); return; }
+      setGeneratedCaption(result.text || "Could not generate caption.");
     } catch (err) { setGeneratedCaption("Network error: " + err.message); }
     setGenerating(false);
   };
