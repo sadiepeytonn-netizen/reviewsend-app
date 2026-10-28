@@ -18,3 +18,7 @@ run $M/20261027_03_cleanup.sql | grep -E 'ERROR' | head -2
 psql -q -U postgres -d $DB -c "update public.employees set auth_user_id = gen_random_uuid()" >/dev/null
 echo "== applying step 3"; run $M/20261027_03_cleanup.sql | grep -vE '^$|^(BEGIN|COMMIT)$' || true
 run 40_after_step3.sql | grep -E 'PASS|FAIL|ERROR'
+echo "== applying step 4"; run $M/20261028_04_crm_foundation.sql | grep -vE '^$|^(BEGIN|COMMIT)$' || true
+run 50_after_step4.sql | grep -E 'PASS|FAIL|ERROR'
+echo "== applying step 5"; run $M/20261028_05_packages_and_handoff.sql | grep -vE '^$|^(BEGIN|COMMIT)$' || true
+run 60_after_step5.sql | grep -E 'PASS|FAIL|ERROR'
