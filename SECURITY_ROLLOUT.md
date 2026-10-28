@@ -22,7 +22,7 @@ Two pull requests go together:
 
 ## Tests already run
 
-- `supabase/tests/run.sh`: rebuilds the current database layout in a throwaway Postgres, applies all three steps, and checks 95 access rules (each kind of login against each table and the file storage). All pass.
+- `supabase/tests/run.sh`: rebuilds the current database layout in a throwaway Postgres, applies all three steps, and checks 96 access rules (each kind of login against each table and the file storage). All pass.
 - `reviewsend-server`: `npm test` runs 27 checks against a fake Supabase and fake Twilio. All pass.
 - The app builds (`npm run build`).
 

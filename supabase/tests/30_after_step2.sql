@@ -13,7 +13,7 @@ reset role;
 -- ── Owner (admin) ──
 set role authenticated;
 select test.sign_in('bentonisaiah03@gmail.com');
-select test.check('owner: sees all 3 clients', 'select count(*) from public.businesses', '3');
+select test.check('owner: sees all 4 clients', 'select count(*) from public.businesses', '4');
 select test.check('owner: sees all companies', 'select count(*) from public.marketing_companies', '2');
 select test.check('owner: sees all internal notes', 'select count(*) from public.client_notes', '3');
 select test.check('owner: sees all tasks', 'select count(*) from public.tasks', '3');
@@ -112,6 +112,8 @@ select test.check('stranger: sees no phone numbers', 'select count(*) from publi
 select test.check('stranger: sees no employees', 'select count(*) from public.employees', '0');
 select test.check('stranger: sees no companies', 'select count(*) from public.marketing_companies', '0');
 select test.check('stranger: cannot make themselves an owner', $q$insert into public.app_admins (email) values ('stranger@test.com') returning 1$q$, 'ERROR');
+select test.check('login without email: owns nothing', $q$select set_config('request.jwt.claims', '{"sub":"00000000-0000-0000-0000-000000000001","role":"authenticated","phone":"+15550001111"}', false) is not null and (select count(*) from public.businesses) = 0$q$, 'true');
+select test.sign_in('stranger@test.com');
 select test.check('stranger: cannot add a company', $q$insert into public.marketing_companies (name, email) values ('x', 'stranger@test.com') returning 1$q$, 'ERROR');
 reset role;
 

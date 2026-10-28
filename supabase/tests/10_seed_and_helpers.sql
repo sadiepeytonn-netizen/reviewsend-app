@@ -40,6 +40,8 @@ begin
     values ('a@test.com', 'Biz A', mc1, am1, 'ya29.A', '1//refreshA', 123, '{"send":true}') returning id into a;
   insert into public.businesses (email, name, marketing_company_id, account_manager_id) values ('b@test.com', 'Biz B', mc1, am2) returning id into b;
   insert into public.businesses (email, name, marketing_company_id) values ('c@test.com', 'Biz C', mc2) returning id into c;
+  -- A real client has a blank email; nobody may become its owner by having no email.
+  insert into public.businesses (email, name, marketing_company_id) values ('', 'Biz Blank', mc2);
   insert into test.ids values ('mc1', mc1), ('mc2', mc2), ('am1', am1), ('am2', am2), ('a', a), ('b', b), ('c', c);
 
   insert into public.employees (business_id, email, name, password) values (a, 'emp_a@test.com', 'Emp A', 'secret123');

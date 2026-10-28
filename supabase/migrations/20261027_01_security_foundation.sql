@@ -82,7 +82,8 @@ on conflict (id) do nothing;
 
 create or replace function private.jwt_email() returns text
 language sql stable
-as $$ select lower(coalesce(auth.jwt() ->> 'email', '')) $$;
+-- Empty means "no email", which must never match a business whose email is blank.
+as $$ select nullif(lower(coalesce(auth.jwt() ->> 'email', '')), '') $$;
 
 create or replace function private.is_service() returns boolean
 language sql stable
