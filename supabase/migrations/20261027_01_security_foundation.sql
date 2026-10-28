@@ -17,7 +17,7 @@ create table if not exists public.app_admins (
   created_at timestamptz not null default now()
 );
 alter table public.app_admins enable row level security;
-insert into public.app_admins (email) values ('bentonisaiah03@gmail.com') on conflict do nothing;
+insert into public.app_admins (email) values ('bentonisaiah03@gmail.com'), ('sadiepeytonn@gmail.com') on conflict do nothing;
 
 -- ── Google connection keys move to a private table ────────────────────────
 -- No security rules are created on this table, so only the server (service

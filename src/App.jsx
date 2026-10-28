@@ -58,7 +58,9 @@ input:disabled, textarea:disabled { opacity: 0.5; cursor: not-allowed; }
 `;
 
 const SERVER = import.meta.env.VITE_SERVER_URL || "https://reviewsend-server-production.up.railway.app";
-const SUPER_ADMIN_EMAIL = "bentonisaiah03@gmail.com";
+// The two owner accounts. The database list (app_admins) is the source of truth;
+// this list keeps the owner dashboard working before that list is readable.
+const OWNER_EMAILS = ["bentonisaiah03@gmail.com", "sadiepeytonn@gmail.com"];
 
 // ── SHARED GOOGLE OAUTH HELPERS ───────────────────────────────────────────────
 // Used by the business owner's own Settings tab AND by account managers /
@@ -361,7 +363,8 @@ export default function App() {
 
   const loadUserRole = async (email) => {
     setLoading(true);
-    if (email === SUPER_ADMIN_EMAIL) { setUserRole("superadmin"); setLoading(false); return; }
+    const { data: adminRow } = await supabase.from("app_admins").select("email").eq("email", email.toLowerCase()).maybeSingle();
+    if (OWNER_EMAILS.includes(email.toLowerCase()) || adminRow) { setUserRole("superadmin"); setLoading(false); return; }
     const { data: mc } = await supabase.from("marketing_companies").select("*").eq("email", email).single();
     if (mc) { setUserRole("marketing"); setMarketingData(mc); setLoading(false); return; }
     const { data: am } = await supabase.from("account_managers").select("*, marketing_companies(*)").eq("email", email).single();
