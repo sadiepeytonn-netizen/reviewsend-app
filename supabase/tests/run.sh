@@ -22,3 +22,5 @@ echo "== applying step 4"; run $M/20261028_04_crm_foundation.sql | grep -vE '^$|
 run 50_after_step4.sql | grep -E 'PASS|FAIL|ERROR'
 echo "== applying step 5"; run $M/20261028_05_packages_and_handoff.sql | grep -vE '^$|^(BEGIN|COMMIT)$' || true
 run 60_after_step5.sql | grep -E 'PASS|FAIL|ERROR'
+echo "== applying step 6"; run $M/20261028_06_company_login_packages.sql | grep -vE '^$|^(BEGIN|COMMIT)$' || true
+run 70_after_step6.sql | grep -E 'PASS|FAIL|ERROR'
