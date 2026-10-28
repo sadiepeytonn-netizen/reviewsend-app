@@ -24,7 +24,7 @@ create function storage.foldername(name text) returns text[] language sql immuta
 alter table storage.objects enable row level security;
 grant usage on schema storage to anon, authenticated, service_role;
 grant all on storage.objects, storage.buckets to anon, authenticated, service_role;
-insert into storage.buckets values ('business-photos','business-photos',true),('business-logos','business-logos',true),('client-files','client-files',false);
+insert into storage.buckets values ('business-photos','business-photos',true),('business-logos','business-logos',true);
 create policy "Public Access" on storage.objects for all using (true) with check (true);
 
 -- Current public tables (columns as exported)
@@ -36,10 +36,10 @@ create table public.bulk_sends (id uuid primary key default gen_random_uuid(), b
 create table public.chat_messages (id uuid primary key default gen_random_uuid(), business_id uuid references public.businesses(id), created_at timestamptz default now(), message text, read boolean, sender_name text, sender_role text);
 create table public.client_files (id uuid primary key default gen_random_uuid(), business_id uuid references public.businesses(id), created_at timestamptz default now(), file_name text, file_path text, file_size int, uploaded_by text);
 create table public.client_notes (id uuid primary key default gen_random_uuid(), author_name text, business_id uuid references public.businesses(id), created_at timestamptz default now(), note text);
-create table public.employees (id uuid primary key default gen_random_uuid(), business_id uuid references public.businesses(id), created_at timestamptz default now(), email text unique, name text, password text not null);
+create table public.employees (id uuid primary key default gen_random_uuid(), business_id uuid references public.businesses(id), created_at timestamptz default now(), email text not null unique, name text not null, password text not null);
 create table public.messages (id uuid primary key default gen_random_uuid(), business_id uuid references public.businesses(id), clicked boolean, clicked_at timestamp, customer_name text, customer_phone text, platform text, sent_at timestamp default now(), tracking_code text);
 create table public.photos (id uuid primary key default gen_random_uuid(), applied_keywords text[], business_id uuid references public.businesses(id), caption text, created_at timestamp default now(), downloaded_at timestamp, file_name text, file_path text, posted_at timestamp, posted_platforms text[], status text, uploaded_by text);
-create table public.rating_snapshots (business_id uuid references public.businesses(id), created_at timestamptz default now(), rating numeric, review_count int);
+create table public.rating_snapshots (business_id uuid not null references public.businesses(id), snapshot_date date not null, rating numeric, review_count int, created_at timestamptz default now(), primary key (business_id, snapshot_date));
 
 grant usage on schema public to anon, authenticated, service_role;
 grant all on all tables in schema public to anon, authenticated, service_role;

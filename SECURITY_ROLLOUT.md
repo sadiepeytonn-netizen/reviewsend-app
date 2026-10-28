@@ -18,11 +18,11 @@ Two pull requests go together:
 | Client employee passwords stored in plain text and checked by the server | Employees get real Supabase logins with the **same password** (they notice nothing); plain-text passwords are deleted |
 | Google keys stored on the client record and handled in the browser | Keys move to a private table only the server can read |
 | The AI (Anthropic) key was built into the public app | AI captions go through the server; the key lives only on Railway |
-| `tasks` table missing, and rating history was never saved | Both created/fixed |
+| `tasks` table and the private `client-files` storage folder were never created (staff task list and Files section could not work) | Both created |
 
 ## Tests already run
 
-- `supabase/tests/run.sh`: rebuilds the current database layout in a throwaway Postgres, applies all three steps, and checks 96 access rules (each kind of login against each table and the file storage). All pass.
+- `supabase/tests/run.sh`: rebuilds the current database layout in a throwaway Postgres, applies all three steps, and checks 95 access rules (each kind of login against each table and the file storage). All pass.
 - `reviewsend-server`: `npm test` runs 27 checks against a fake Supabase and fake Twilio. All pass.
 - The app builds (`npm run build`).
 

@@ -50,9 +50,9 @@ begin
   insert into public.client_files (business_id, file_path) values (a, a || '/f.pdf'), (b, b || '/f.pdf'), (c, c || '/f.pdf');
   insert into public.appointments (business_id, account_manager_id, marketing_company_id, title) values (a, am1, mc1, 'A call'), (b, am2, mc1, 'B call'), (c, null, mc2, 'C call');
   insert into public.bulk_sends (business_id, sent_count) values (a, 1), (b, 1), (c, 1);
-  insert into public.rating_snapshots (business_id, rating, review_count, created_at) values
-    (a, 4.5, 10, '2026-10-01 12:00-04'), (a, 4.6, 11, '2026-10-01 18:00-04'), (b, 4.0, 5, '2026-10-01 12:00-04'), (c, 3.9, 2, '2026-10-01 12:00-04');
-  insert into storage.objects (bucket_id, name) values ('business-photos', a || '/1.jpg'), ('client-files', a || '/f.pdf'), ('client-files', b || '/f.pdf');
+  insert into public.rating_snapshots (business_id, snapshot_date, rating, review_count) values
+    (a, '2026-10-01', 4.6, 11), (b, '2026-10-01', 4.0, 5), (c, '2026-10-01', 3.9, 2);
+  insert into storage.objects (bucket_id, name) values ('business-photos', a || '/1.jpg');
 end $$;
 
 -- Sign in as someone (empty email = not signed in).

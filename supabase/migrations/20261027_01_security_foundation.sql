@@ -70,20 +70,11 @@ alter table public.tasks enable row level security;
 create index if not exists tasks_account_manager_idx on public.tasks (account_manager_id);
 create index if not exists tasks_marketing_company_idx on public.tasks (marketing_company_id);
 
--- ── Rating history (the server saves one snapshot per business per day) ──
--- The server has been writing a snapshot_date the table didn't have, so no
--- history was being saved. This adds the column and the one-per-day rule.
-alter table public.rating_snapshots add column if not exists snapshot_date date;
-update public.rating_snapshots
-set snapshot_date = (created_at at time zone 'America/New_York')::date
-where snapshot_date is null;
-delete from public.rating_snapshots a
-using public.rating_snapshots b
-where a.business_id = b.business_id
-  and a.snapshot_date = b.snapshot_date
-  and (coalesce(a.created_at, 'epoch'), a.ctid) < (coalesce(b.created_at, 'epoch'), b.ctid);
-alter table public.rating_snapshots alter column snapshot_date set default current_date;
-create unique index if not exists rating_snapshots_business_day on public.rating_snapshots (business_id, snapshot_date);
+-- ── Internal client files bucket ──────────────────────────────────────────
+-- The staff "Files" section uploads to a "client-files" storage bucket that
+-- was never created. Create it as a private bucket.
+insert into storage.buckets (id, name, public) values ('client-files', 'client-files', false)
+on conflict (id) do nothing;
 
 -- ── Helper functions used by the security rules ───────────────────────────
 -- "security definer" lets these look up roles without tripping over the

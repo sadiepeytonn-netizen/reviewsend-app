@@ -11,8 +11,7 @@ reset role;
 select test.check('step1: Google keys copied to the private table', 'select count(*) from public.business_google_tokens', '1');
 select test.check('step1: copied refresh key is correct', 'select refresh_token from public.business_google_tokens', '1//refreshA');
 select test.check('step1: connected flag set from existing keys', $q$select string_agg(name || '=' || google_connected, ',' order by name) from public.businesses$q$, 'Biz A=true,Biz B=false,Biz C=false');
-select test.check('step1: rating history kept one snapshot per day', $q$select count(*) from public.rating_snapshots where business_id = test.id('a')$q$, '1');
-select test.check('step1: kept the later snapshot of the day', $q$select rating::text from public.rating_snapshots where business_id = test.id('a')$q$, '4.6');
+select test.check('step1: private client-files bucket created', $q$select public::text from storage.buckets where id = 'client-files'$q$, 'false');
 select test.check('step1: tasks table now exists', 'select count(*) from public.tasks', '0');
 select test.check('step1: owner listed in app_admins', 'select count(*) from public.app_admins', '1');
 
@@ -21,3 +20,6 @@ insert into public.tasks (marketing_company_id, account_manager_id, business_id,
   (test.id('mc1'), test.id('am1'), test.id('a'), 'task A'),
   (test.id('mc1'), test.id('am2'), test.id('b'), 'task B'),
   (test.id('mc2'), null, test.id('c'), 'task C');
+
+-- Internal files for step 2 tests (bucket exists now).
+insert into storage.objects (bucket_id, name) values ('client-files', test.id('a') || '/f.pdf'), ('client-files', test.id('b') || '/f.pdf');
