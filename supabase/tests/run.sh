@@ -26,3 +26,5 @@ echo "== applying step 6"; run $M/20261028_06_company_login_packages.sql | grep 
 run 70_after_step6.sql | grep -E 'PASS|FAIL|ERROR'
 echo "== applying step 7"; run $M/20261028_07_team_active.sql | grep -vE '^$|^(BEGIN|COMMIT)$' || true
 run 80_after_step7.sql | grep -E 'PASS|FAIL|ERROR'
+echo "== applying step 8"; run $M/20261029_08_tasks_and_work_sessions.sql | grep -vE '^$|^(BEGIN|COMMIT)$' || true
+run 90_after_step8.sql | grep -E 'PASS|FAIL|ERROR'
